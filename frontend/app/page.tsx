@@ -1,8 +1,16 @@
+'use client';
+
+import { useEffect } from 'react';
+import { sdk }           from '@farcaster/miniapp-sdk';
 import { Header }        from '@/components/Header';
 import { PostConfession } from '@/components/PostConfession';
 import { ConfessionFeed } from '@/components/ConfessionFeed';
 
 export default function Home() {
+  useEffect(() => {
+    sdk.actions.ready();
+  }, []);
+
   return (
     <div className="min-h-screen bg-pink-50">
       <Header />

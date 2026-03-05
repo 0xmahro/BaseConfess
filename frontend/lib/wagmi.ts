@@ -7,8 +7,9 @@ import {
 } from '@rainbow-me/rainbowkit/wallets';
 import { createConfig, http } from 'wagmi';
 import { base, baseSepolia } from 'wagmi/chains';
+import { farcasterMiniApp } from '@farcaster/miniapp-wagmi-connector';
 
-const connectors = connectorsForWallets(
+const rainbowConnectors = connectorsForWallets(
   [
     {
       groupName: 'Recommended',
@@ -22,7 +23,10 @@ const connectors = connectorsForWallets(
 );
 
 export const wagmiConfig = createConfig({
-  connectors,
+  connectors: [
+    farcasterMiniApp(),
+    ...rainbowConnectors,
+  ],
   chains: [base, baseSepolia],
   transports: {
     [base.id]:        http(),

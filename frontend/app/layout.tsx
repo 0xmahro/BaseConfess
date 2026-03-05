@@ -2,18 +2,39 @@ import type { Metadata } from 'next';
 import { Providers } from './providers';
 import './globals.css';
 
-export const metadata: Metadata = {
-  title:       'BaseConfess – Anonymous On-Chain Confessions',
-  description: 'Post anonymous confessions on Base. Vote, tip, and engage — all on-chain.',
-  icons: {
-    icon: '/favicon.ico',
-  },
-  openGraph: {
-    title:       'BaseConfess',
-    description: 'Anonymous on-chain confessions on Base network.',
-    type:        'website',
-  },
-};
+const APP_URL = process.env.NEXT_PUBLIC_URL ?? 'https://baseconfess.vercel.app';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title:       'BaseConfess – Anonymous On-Chain Confessions',
+    description: 'Post anonymous confessions on Base. Vote, tip, and engage — all on-chain.',
+    icons: {
+      icon: '/favicon.ico',
+    },
+    openGraph: {
+      title:       'BaseConfess',
+      description: 'Anonymous on-chain confessions on Base network.',
+      type:        'website',
+      images:      [`${APP_URL}/og.png`],
+    },
+    other: {
+      'fc:miniapp': JSON.stringify({
+        version:  'next',
+        imageUrl: `${APP_URL}/og.png`,
+        button: {
+          title:  'Open BaseConfess',
+          action: {
+            type:                 'launch_miniapp',
+            name:                 'BaseConfess',
+            url:                  APP_URL,
+            splashImageUrl:       `${APP_URL}/splash.png`,
+            splashBackgroundColor: '#fdf2f8',
+          },
+        },
+      }),
+    },
+  };
+}
 
 export default function RootLayout({
   children,
