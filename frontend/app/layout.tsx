@@ -9,7 +9,8 @@ export async function generateMetadata(): Promise<Metadata> {
     title:       'BaseConfess – Anonymous On-Chain Confessions',
     description: 'Post anonymous confessions on Base. Vote, tip, and engage — all on-chain.',
     icons: {
-      icon: '/favicon.ico',
+      icon:  '/favicon.png',
+      apple: '/icon.png',
     },
     openGraph: {
       title:       'BaseConfess',
