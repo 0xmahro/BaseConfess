@@ -32,5 +32,5 @@ export const wagmiConfig = createConfig({
     [base.id]:        http(),
     [baseSepolia.id]: http(),
   },
-  ssr: true,
+  // ssr: false (default) uses localStorage — connection persists across refreshes
 });
