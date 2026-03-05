@@ -20,7 +20,7 @@ export async function GET() {
       primaryCategory:      'social',
       tags:                 ['confession', 'base', 'onchain', 'social', 'anonymous'],
       heroImageUrl:         `${APP_URL}/og.png`,
-      tagline:              'Your secret lives on Base forever',
+      tagline:              'Confess on Base. Stay anon.',
       ogTitle:              'BaseConfess',
       ogDescription:        'Anonymous on-chain confessions on Base',
       ogImageUrl:           `${APP_URL}/og.png`,
