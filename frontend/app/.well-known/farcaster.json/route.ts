@@ -1,5 +1,5 @@
 export async function GET() {
-  const APP_URL = process.env.NEXT_PUBLIC_URL ?? 'https://baseconfess.vercel.app';
+  const APP_URL = process.env.NEXT_PUBLIC_URL ?? 'https://baseconfess.fun';
 
   return Response.json({
     accountAssociation: {

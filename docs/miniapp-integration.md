@@ -139,7 +139,7 @@ export async function generateMetadata(): Promise<Metadata> {
 ## Yayınlama Adımları
 
 1. **Deploy** — Vercel'e push, URL'yi al (örn. `baseconfess.vercel.app`)
-2. **Env** — `NEXT_PUBLIC_URL=https://baseconfess.vercel.app` ekle
+2. **Env** — `NEXT_PUBLIC_URL=https://baseconfess.fun` ekle
 3. **Account Association** — [base.dev/preview](https://www.base.dev/preview?tab=account) → domain gir → imzala → `farcaster.json`'a yapıştır
 4. **Redeploy** — Güncel manifest ile tekrar deploy
 5. **Preview** — [base.dev/preview](https://www.base.dev/preview) → URL'yi test et

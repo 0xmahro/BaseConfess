@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Providers } from './providers';
 import './globals.css';
 
-const APP_URL = process.env.NEXT_PUBLIC_URL ?? 'https://baseconfess.vercel.app';
+const APP_URL = process.env.NEXT_PUBLIC_URL ?? 'https://baseconfess.fun';
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
