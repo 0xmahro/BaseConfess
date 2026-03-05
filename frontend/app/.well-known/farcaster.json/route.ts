@@ -3,10 +3,9 @@ export async function GET() {
 
   return Response.json({
     accountAssociation: {
-      // These are filled after domain verification on https://www.base.dev/preview?tab=account
-      header:    '',
-      payload:   '',
-      signature: '',
+      header:    'eyJmaWQiOjEwMTY1NTYsInR5cGUiOiJhdXRoIiwia2V5IjoiMHg5NjJGRWE4RDA2Q0Q4OEE5Njg0MjU5YkUyNjkyNTk3OEQ4OTBGQjc4In0',
+      payload:   'eyJkb21haW4iOiJiYXNlY29uZmVzcy5mdW4ifQ',
+      signature: 'f0YfhJMATbRiHL5EgiQlVgnR2cRUKQqonLUW3jZ3TIt+JbJpkYLFOalkURug+QxEM6FtitFQw57CT5nI6gAhsxs=',
     },
     miniapp: {
       version:              '1',
