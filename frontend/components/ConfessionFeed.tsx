@@ -6,10 +6,10 @@ import { supabase }   from '@/lib/supabase';
 import { ConfessionCard } from './ConfessionCard';
 import type { Confession, UserVoteMap, VoteType } from '@/types';
 
-type SortKey = 'trending' | 'most_liked' | 'most_disliked' | 'most_tipped';
+type SortKey = 'newest' | 'most_liked' | 'most_disliked' | 'most_tipped';
 
 const SORT_TABS: { key: SortKey; label: string; emoji: string }[] = [
-  { key: 'trending',      label: 'Trending',      emoji: '🔥' },
+  { key: 'newest',        label: 'Newest',        emoji: '🕐' },
   { key: 'most_liked',    label: 'Most Liked',    emoji: '💚' },
   { key: 'most_disliked', label: 'Most Disliked', emoji: '💔' },
   { key: 'most_tipped',   label: 'Most Tipped',   emoji: '💸' },
@@ -20,10 +20,8 @@ const PAGE_SIZE = 30;
 function sortConfessions(list: Confession[], key: SortKey): Confession[] {
   const copy = [...list];
   switch (key) {
-    case 'trending':
-      return copy.sort((a, b) =>
-        (b.likes - b.dislikes + b.tips_received) - (a.likes - a.dislikes + a.tips_received)
-      );
+    case 'newest':
+      return copy.sort((a, b) => b.id - a.id);
     case 'most_liked':    return copy.sort((a, b) => b.likes - a.likes);
     case 'most_disliked': return copy.sort((a, b) => b.dislikes - a.dislikes);
     case 'most_tipped':   return copy.sort((a, b) => b.tips_received - a.tips_received);
@@ -134,14 +132,14 @@ export function ConfessionFeed() {
   const [userVotes,   setUserVotes]   = useState<UserVoteMap>({});
   const [isLoading,   setIsLoading]   = useState(true);
   const [error,       setError]       = useState('');
-  const [sortKey,     setSortKey]     = useState<SortKey>('trending');
+  const [sortKey,     setSortKey]     = useState<SortKey>('newest');
   const [page,        setPage]        = useState(1);
 
   const fetchConfessions = useCallback(async () => {
     const { data, error: err } = await supabase
       .from('confessions')
       .select('*')
-      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .limit(500);
 
     if (err) { setError('Could not load confessions.'); return; }
