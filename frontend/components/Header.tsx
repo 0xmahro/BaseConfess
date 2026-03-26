@@ -1,9 +1,50 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
 
 export function Header() {
+  const [totalUsers, setTotalUsers] = useState<number>(0);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadTotalUsers = async () => {
+      const { data } = await supabase
+        .from('confessions')
+        .select('wallet');
+
+      if (!mounted) return;
+
+      const uniqueWallets = new Set(
+        ((data as { wallet: string }[] | null) ?? [])
+          .map((row) => row.wallet?.toLowerCase())
+          .filter(Boolean)
+      );
+      setTotalUsers(uniqueWallets.size);
+    };
+
+    loadTotalUsers();
+
+    const channel = supabase
+      .channel('header_active_users')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'confessions' },
+        () => {
+          loadTotalUsers();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   return (
     <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-pink-200">
       <div className="max-w-lg mx-auto px-4 h-[60px] flex items-center justify-between">
@@ -31,7 +72,10 @@ export function Header() {
               hover:bg-pink-50 transition-colors"
           >
             <span className="sm:hidden">🪪</span>
-            <span className="hidden sm:inline">Profile</span>
+            <span className="hidden sm:inline">
+              Profile
+              <span className="ml-1 text-pink-300">({totalUsers} kullanıcı)</span>
+            </span>
           </Link>
         </div>
 
