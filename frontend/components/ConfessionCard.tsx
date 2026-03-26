@@ -7,11 +7,13 @@ import { CONTRACT_ADDRESS, CONTRACT_ABI } from '@/lib/config';
 import { supabase } from '@/lib/supabase';
 import { TipModal } from './TipModal';
 import type { Confession, VoteType } from '@/types';
+import Link from 'next/link';
 
 interface ConfessionCardProps {
   confession: Confession;
   userVote:   VoteType | undefined;
   onVoted:    (confessionId: number, vote: VoteType) => void;
+  username?:  string | null;
 }
 
 function formatWallet(wallet: string): string {
@@ -39,7 +41,7 @@ function walletColor(wallet: string): string {
   return colors[idx];
 }
 
-export function ConfessionCard({ confession, userVote, onVoted }: ConfessionCardProps) {
+export function ConfessionCard({ confession, userVote, onVoted, username }: ConfessionCardProps) {
   const { address, isConnected } = useAccount();
   const chainId    = useChainId();
   const wrongChain = isConnected && chainId !== base.id;
@@ -144,9 +146,19 @@ export function ConfessionCard({ confession, userVote, onVoted }: ConfessionCard
                 {confession.wallet.slice(2, 4).toUpperCase()}
               </span>
             </div>
-            <span className="font-mono text-xs font-semibold text-mauve">
-              {formatWallet(confession.wallet)}
-            </span>
+            <div className="leading-tight">
+              {username ? (
+                <Link
+                  href={`/p/${encodeURIComponent(username)}`}
+                  className="text-xs font-extrabold text-pink-500 hover:text-pink-600 transition-colors"
+                >
+                  @{username}
+                </Link>
+              ) : null}
+              <div className="font-mono text-[11px] font-semibold text-mauve">
+                {formatWallet(confession.wallet)}
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">

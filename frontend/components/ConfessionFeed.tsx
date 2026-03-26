@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useReadContracts } from 'wagmi';
 import { supabase }   from '@/lib/supabase';
 import { ConfessionCard } from './ConfessionCard';
 import type { Confession, UserVoteMap, VoteType } from '@/types';
+import { PROFILE_CONTRACT_ABI, PROFILE_CONTRACT_ADDRESS } from '@/lib/config';
 
 type SortKey = 'newest' | 'most_liked' | 'most_disliked' | 'most_tipped';
 
@@ -203,6 +204,50 @@ export function ConfessionFeed() {
     [sorted, page]
   );
 
+  // Optional: Resolve usernames from ProfileRegistry for wallets on current page.
+  const isMissingProfileContract =
+    PROFILE_CONTRACT_ADDRESS === '0x0000000000000000000000000000000000000000';
+  const pageWallets = useMemo(() => {
+    const uniq = new Set<string>();
+    for (const c of paginated) uniq.add(c.wallet.toLowerCase());
+    return Array.from(uniq);
+  }, [paginated]);
+
+  const { data: profiles } = useReadContracts({
+    allowFailure: true,
+    contracts: pageWallets.map((w) => ({
+      address: PROFILE_CONTRACT_ADDRESS,
+      abi: PROFILE_CONTRACT_ABI,
+      functionName: 'getProfile',
+      args: [w as `0x${string}`],
+    })),
+    query: { enabled: !isMissingProfileContract && pageWallets.length > 0 },
+  });
+
+  const walletToUsername = useMemo(() => {
+    const map: Record<string, string | null> = {};
+    if (!profiles) return map;
+    profiles.forEach((r, idx) => {
+      const wallet = pageWallets[idx];
+      if (!wallet) return;
+      if (r.status !== 'success') { map[wallet] = null; return; }
+      const val = r.result as unknown as [
+        boolean,
+        `0x${string}`,
+        string,
+        string[],
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+      ];
+      const exists = Boolean(val?.[0]);
+      const username = (val?.[2] ?? '').trim();
+      map[wallet] = exists && username ? username : null;
+    });
+    return map;
+  }, [profiles, pageWallets]);
+
   const handlePageChange = (p: number) => {
     setPage(p);
     // Scroll to top of feed smoothly
@@ -298,6 +343,7 @@ export function ConfessionFeed() {
           confession={confession}
           userVote={userVotes[confession.id]}
           onVoted={handleVoted}
+          username={walletToUsername[confession.wallet.toLowerCase()] ?? null}
         />
       ))}
 

@@ -12,6 +12,74 @@ export const CONTRACT_ADDRESS =
 
 export const CONFESSION_FEE = '0.000025'; // ETH — must match confessionFee in contract
 
+// ============================================================
+// PROFILE SYSTEM CONFIGURATION
+// ============================================================
+// Deploy ProfileSystem.sol and set this address.
+// ============================================================
+export const PROFILE_CONTRACT_ADDRESS =
+  (process.env.NEXT_PUBLIC_PROFILE_SYSTEM_ADDRESS ??
+    '0x0000000000000000000000000000000000000000') as `0x${string}`;
+
+export const PROFILE_CREATION_FEE = '0.00005'; // ETH — must match profileCreationFee in contract
+
+export const PROFILE_CONTRACT_ABI = [
+  {
+    name: 'usernameOwner',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: '', type: 'bytes32', internalType: 'bytes32' }],
+    outputs: [{ name: '', type: 'address', internalType: 'address' }],
+  },
+  {
+    name: 'profileCreationFee',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+  },
+  {
+    name: 'getProfile',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'user', type: 'address', internalType: 'address' }],
+    outputs: [
+      { name: 'exists', type: 'bool', internalType: 'bool' },
+      { name: 'owner', type: 'address', internalType: 'address' },
+      { name: 'username', type: 'string', internalType: 'string' },
+      { name: 'tags', type: 'string[]', internalType: 'string[]' },
+      { name: 'activityScore', type: 'uint256', internalType: 'uint256' },
+      { name: 'totalTipsReceived', type: 'uint256', internalType: 'uint256' },
+      { name: 'totalSpent', type: 'uint256', internalType: 'uint256' },
+      { name: 'confessionCount', type: 'uint256', internalType: 'uint256' },
+    ],
+  },
+  {
+    name: 'createProfile',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'username', type: 'string', internalType: 'string' },
+      { name: 'tags', type: 'string[]', internalType: 'string[]' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'updateTags',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'tags', type: 'string[]', internalType: 'string[]' }],
+    outputs: [],
+  },
+  {
+    name: 'sendTip',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [{ name: 'to', type: 'address', internalType: 'address' }],
+    outputs: [],
+  },
+] as const;
+
 export const CONTRACT_ABI = [
   {
     inputs: [],
