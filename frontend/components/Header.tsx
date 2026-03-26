@@ -74,7 +74,7 @@ export function Header() {
             <span className="sm:hidden">🪪</span>
             <span className="hidden sm:inline">
               Profile
-              <span className="ml-1 text-pink-300">({totalUsers} kullanıcı)</span>
+              <span className="ml-1 text-pink-300">({totalUsers} users)</span>
             </span>
           </Link>
         </div>
