@@ -26,11 +26,12 @@ export function Header() {
           <Link
             href="/profile"
             suppressHydrationWarning
-            className="hidden sm:inline-flex items-center justify-center h-9 px-3 rounded-2xl
+            className="inline-flex items-center justify-center h-9 px-3 rounded-2xl
               border border-pink-200 bg-white text-xs font-extrabold text-pink-500
               hover:bg-pink-50 transition-colors"
           >
-            Profile
+            <span className="sm:hidden">🪪</span>
+            <span className="hidden sm:inline">Profile</span>
           </Link>
         </div>
 
