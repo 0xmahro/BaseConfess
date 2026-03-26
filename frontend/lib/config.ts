@@ -22,6 +22,7 @@ export const PROFILE_CONTRACT_ADDRESS =
     '0x0000000000000000000000000000000000000000') as `0x${string}`;
 
 export const PROFILE_CREATION_FEE = '0.00005'; // ETH — must match profileCreationFee in contract
+export const USERNAME_CHANGE_FEE = '0.00005'; // ETH — must match usernameChangeFee in contract
 
 export const PROFILE_CONTRACT_ABI = [
   {
@@ -33,6 +34,13 @@ export const PROFILE_CONTRACT_ABI = [
   },
   {
     name: 'profileCreationFee',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+  },
+  {
+    name: 'usernameChangeFee',
     type: 'function',
     stateMutability: 'view',
     inputs: [],
@@ -62,6 +70,13 @@ export const PROFILE_CONTRACT_ABI = [
       { name: 'username', type: 'string', internalType: 'string' },
       { name: 'tags', type: 'string[]', internalType: 'string[]' },
     ],
+    outputs: [],
+  },
+  {
+    name: 'updateUsername',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [{ name: 'newUsername', type: 'string', internalType: 'string' }],
     outputs: [],
   },
   {

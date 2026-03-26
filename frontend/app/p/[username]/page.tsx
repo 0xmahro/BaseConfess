@@ -8,8 +8,18 @@ import { Header } from '@/components/Header';
 import { PROFILE_CONTRACT_ABI, PROFILE_CONTRACT_ADDRESS } from '@/lib/config';
 import { ProfileView } from '@/components/ProfileView';
 
+function asciiLower(s: string) {
+  return s.replace(/[A-Z]/g, (c) => c.toLowerCase());
+}
+
 function normalizeUsername(raw: string) {
-  return raw.trim().replace(/^@/, '').toLowerCase();
+  // Next route params can be URL-encoded; decode first.
+  const decoded = (() => {
+    try { return decodeURIComponent(raw); } catch { return raw; }
+  })();
+
+  // Contract lowercasing only affects ASCII A-Z; mirror that here for key generation.
+  return asciiLower(decoded.trim().replace(/^@/, ''));
 }
 
 export default function ProfileByUsernamePage() {

@@ -9,6 +9,7 @@ import {
   PROFILE_CONTRACT_ABI,
   PROFILE_CONTRACT_ADDRESS,
   PROFILE_CREATION_FEE,
+  USERNAME_CHANGE_FEE,
 } from '@/lib/config';
 import type { Confession } from '@/types';
 
@@ -144,6 +145,7 @@ export function ProfileView({ targetAddress }: { targetAddress: string }) {
   const [status, setStatus] = useState<Status>('idle');
   const [errMsg, setErrMsg] = useState('');
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>();
+  const [pendingUsername, setPendingUsername] = useState<string | null>(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -169,10 +171,21 @@ export function ProfileView({ targetAddress }: { targetAddress: string }) {
     if (!confirmed) return;
     setStatus('success');
     setTxHash(undefined);
+    // Refetch twice to avoid RPC/indexing delays and cache stickiness.
     refetchProfile?.();
+    const t2 = setTimeout(() => refetchProfile?.(), 1500);
     fetchConfessions(true);
+    if (pendingUsername) {
+      // If currently on /p/<username>, keep URL in sync with the new Meme ID.
+      try {
+        if (typeof window !== 'undefined' && window.location.pathname.startsWith('/p/')) {
+          window.history.replaceState(null, '', `/p/${encodeURIComponent(pendingUsername)}`);
+        }
+      } catch {}
+      setPendingUsername(null);
+    }
     const t = setTimeout(() => setStatus('idle'), 3500);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(t); clearTimeout(t2); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [confirmed]);
 
@@ -216,6 +229,31 @@ export function ProfileView({ targetAddress }: { targetAddress: string }) {
       const rejected = msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('denied');
       setErrMsg(rejected ? 'Transaction cancelled.' : 'Transaction failed.');
       setStatus('error');
+    }
+  };
+
+  const doUpdateUsername = async () => {
+    if (!isOwner || !isConnected || isMissingContract) return;
+    if (!memeId.trim()) return;
+    setStatus('pending');
+    setErrMsg('');
+    setPendingUsername(memeId.trim());
+    try {
+      const hash = await writeContractAsync({
+        address: PROFILE_CONTRACT_ADDRESS,
+        abi: PROFILE_CONTRACT_ABI,
+        functionName: 'updateUsername',
+        args: [memeId.trim()],
+        value: parseEther(USERNAME_CHANGE_FEE),
+      });
+      setTxHash(hash);
+      setStatus('confirming');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '';
+      const rejected = msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('denied');
+      setErrMsg(rejected ? 'Transaction cancelled.' : 'Transaction failed.');
+      setStatus('error');
+      setPendingUsername(null);
     }
   };
 
@@ -350,6 +388,11 @@ export function ProfileView({ targetAddress }: { targetAddress: string }) {
                 border-pink-200 outline-none transition-all focus:border-pink-400 focus:ring-2 focus:ring-pink-100
                 disabled:opacity-50 disabled:cursor-not-allowed"
             />
+            {profile?.exists && (
+              <p className="text-[11px] text-mauve font-semibold">
+                Changing Meme ID costs {USERNAME_CHANGE_FEE} ETH.
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <label className="text-xs font-bold text-mauve">Tags (pick up to 3)</label>
@@ -401,16 +444,29 @@ export function ProfileView({ targetAddress }: { targetAddress: string }) {
               </button>
             </>
           ) : (
-            <button
-              onClick={doUpdateTags}
-              disabled={!isConnected || busy || isMissingContract}
-              className="w-full h-12 rounded-2xl text-sm font-extrabold
-                bg-gradient-to-r from-pink-500 to-pink-400 text-white shadow-pink
-                hover:from-pink-600 hover:to-pink-500 active:scale-[0.98]
-                disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-            >
-              {busy ? 'Confirming…' : 'Update tags'}
-            </button>
+            <div className="space-y-2">
+              <button
+                onClick={doUpdateUsername}
+                disabled={!isConnected || busy || isMissingContract || memeId.trim().length === 0}
+                className="w-full h-12 rounded-2xl text-sm font-extrabold
+                  bg-gradient-to-r from-pink-500 to-pink-400 text-white shadow-pink
+                  hover:from-pink-600 hover:to-pink-500 active:scale-[0.98]
+                  disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                {busy ? 'Confirming…' : 'Update Meme ID'}
+              </button>
+
+              <button
+                onClick={doUpdateTags}
+                disabled={!isConnected || busy || isMissingContract}
+                className="w-full h-12 rounded-2xl text-sm font-extrabold
+                  border border-pink-200 bg-white text-pink-500
+                  hover:bg-pink-50 active:scale-[0.98]
+                  disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                {busy ? 'Confirming…' : 'Update tags'}
+              </button>
+            </div>
           )}
 
           {status === 'success' && (

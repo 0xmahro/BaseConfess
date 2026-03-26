@@ -12,6 +12,7 @@ pragma solidity ^0.8.20;
  */
 contract ProfileSystem {
     uint256 public profileCreationFee = 0.00005 ether;
+    uint256 public usernameChangeFee  = 0.00005 ether;
 
     // Fixed tag system: users can select up to 3 tags from this allowlist.
     mapping(bytes32 => bool) private allowedTag;
@@ -38,6 +39,7 @@ contract ProfileSystem {
     mapping(bytes32 => address) public usernameOwner; // keccak256(lower(username)) -> owner
 
     event ProfileCreated(address indexed owner, string username);
+    event UsernameUpdated(address indexed owner, string username);
     event TagsUpdated(address indexed owner, string[] tags);
     event TipSent(address indexed sender, address indexed receiver, uint256 amount);
     event ConfessionCreated(address indexed owner, string content, uint256 timestamp);
@@ -106,6 +108,29 @@ contract ProfileSystem {
 
         emit ProfileCreated(msg.sender, username);
         emit TagsUpdated(msg.sender, p.tags);
+    }
+
+    function updateUsername(string calldata newUsername) external payable {
+        Profile storage p = profiles[msg.sender];
+        require(p.exists, "Profile not found");
+        require(msg.value >= usernameChangeFee, "Username change requires 0.00005 ETH");
+        _requireValidUsername(newUsername);
+
+        bytes32 newKey = _usernameKey(newUsername);
+        address currentOwner = usernameOwner[newKey];
+        require(currentOwner == address(0) || currentOwner == msg.sender, "Username taken");
+
+        // Free old username
+        bytes32 oldKey = _usernameKey(p.username);
+        if (oldKey != newKey && usernameOwner[oldKey] == msg.sender) {
+            usernameOwner[oldKey] = address(0);
+        }
+
+        p.username = newUsername;
+        p.totalSpent += msg.value;
+        usernameOwner[newKey] = msg.sender;
+
+        emit UsernameUpdated(msg.sender, newUsername);
     }
 
     function updateTags(string[] calldata tags) external {
