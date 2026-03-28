@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { Header } from '@/components/Header';
 import { PostConfession } from '@/components/PostConfession';
@@ -21,6 +22,18 @@ export default function Home() {
       <Header />
 
       <main className="max-w-lg mx-auto px-4 py-8 space-y-6">
+        <div className="flex justify-center">
+          <Link
+            href="/profile"
+            className="inline-flex items-center justify-center gap-2 py-2.5 px-6 rounded-2xl text-sm font-extrabold
+              border-2 border-pink-300 bg-white text-pink-600 shadow-sm
+              hover:bg-pink-50 hover:border-pink-400 hover:shadow-card transition-all duration-200 active:scale-[0.98]"
+          >
+            <span className="text-base leading-none" aria-hidden>👤</span>
+            Create Profile
+          </Link>
+        </div>
+
         {/* Screen switcher */}
         <div
           className="flex p-1 rounded-2xl bg-white/90 border border-pink-200 shadow-card gap-1"
