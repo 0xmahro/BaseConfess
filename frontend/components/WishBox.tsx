@@ -260,6 +260,7 @@ export function WishBox() {
             <p className="text-xs font-semibold text-violet-500/90 rounded-2xl bg-violet-50 border border-violet-100 px-3 py-2">
               Deploy <span className="font-mono text-[11px]">WishBox.sol</span> and set{' '}
               <span className="font-mono text-[11px]">NEXT_PUBLIC_WISH_BOX_ADDRESS</span> to enable wishes on-chain.
+              On Vercel: Project → Settings → Environment Variables → add it for Production → Redeploy.
             </p>
           )}
 
@@ -278,7 +279,7 @@ export function WishBox() {
               value={wishText}
               onChange={(e) => setWishText(e.target.value)}
               placeholder="Close your eyes, make a wish… (for you only — not stored on-chain)"
-              disabled={isProcessing || !isConnected || wrongChain || !isConfigured}
+              disabled={isProcessing || wrongChain}
               rows={3}
               maxLength={MAX_WISH_CHARS}
               className="w-full resize-none rounded-2xl border border-violet-200/80 px-4 py-3 pb-7 text-sm text-ink placeholder-violet-300 font-medium bg-violet-50/40 outline-none transition-all duration-200 focus:border-violet-400 focus:ring-2 focus:ring-violet-100 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -301,7 +302,7 @@ export function WishBox() {
                   <button
                     key={cat.id}
                     type="button"
-                    disabled={!isConfigured || isProcessing || !isConnected || wrongChain}
+                    disabled={isProcessing || wrongChain}
                     onClick={() => setSelectedCategory(cat.id)}
                     className={`
                       rounded-2xl px-3 py-2.5 text-xs font-extrabold transition-all duration-200 border
