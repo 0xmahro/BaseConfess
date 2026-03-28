@@ -120,8 +120,9 @@ export function ProfileView({ targetAddress }: { targetAddress: string }) {
     const confessionCount = confessions.length;
     const tips = tipsReceivedEth;
     const spent = totalSpentEth;
-    return Math.floor(confessionCount * 2 + tips * 5 + spent * 10);
-  }, [confessions.length, tipsReceivedEth, totalSpentEth]);
+    const wishes = wishCountForProfile ?? 0;
+    return Math.floor(confessionCount * 2 + wishes * 2 + tips * 5 + spent * 10);
+  }, [confessions.length, tipsReceivedEth, totalSpentEth, wishCountForProfile]);
 
   const PAGE_SIZE = 30;
 

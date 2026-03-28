@@ -71,7 +71,7 @@ export function Header() {
               border border-pink-200 bg-white text-xs font-extrabold text-pink-500
               hover:bg-pink-50 transition-colors"
           >
-            <span className="sm:hidden">🪪</span>
+            <span className="sm:hidden font-extrabold text-pink-500">Profile</span>
             <span className="hidden sm:inline">
               Profile
               <span className="ml-1 text-pink-300">({totalUsers} users)</span>
