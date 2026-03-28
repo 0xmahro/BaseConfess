@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   useAccount,
   useChainId,
@@ -96,7 +96,10 @@ export function WishBox() {
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>();
 
   const { writeContractAsync } = useWriteContract();
-  const { isSuccess: txConfirmed } = useWaitForTransactionReceipt({ hash: txHash });
+  const { isSuccess: txConfirmed, data: txReceipt } = useWaitForTransactionReceipt({ hash: txHash });
+
+  const handledTxHashRef = useRef<`0x${string}` | undefined>(undefined);
+  const idleAfterSuccessRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: totalWishes, refetch: refetchTotal } = useReadContract({
     address: contractAddress ?? ZERO,
@@ -171,16 +174,36 @@ export function WishBox() {
     ]);
   }, [refetchTotal, refetchWishes, refetchFee, refetchCategoryCounts]);
 
+  const refetchAllRef = useRef(refetchAll);
+  refetchAllRef.current = refetchAll;
+
   useEffect(() => {
-    if (!txConfirmed) return;
+    return () => {
+      if (idleAfterSuccessRef.current) {
+        clearTimeout(idleAfterSuccessRef.current);
+        idleAfterSuccessRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!txHash || !txConfirmed || !txReceipt) return;
+    if (handledTxHashRef.current === txHash) return;
+    handledTxHashRef.current = txHash;
+
     setWishText('');
     setSelectedCategory(null);
-    setTxHash(undefined);
     setStatus('success');
-    void refetchAll();
-    const t = setTimeout(() => setStatus('idle'), 4500);
-    return () => clearTimeout(t);
-  }, [txConfirmed, refetchAll]);
+    void refetchAllRef.current();
+    setTxHash(undefined);
+
+    if (idleAfterSuccessRef.current) clearTimeout(idleAfterSuccessRef.current);
+    idleAfterSuccessRef.current = setTimeout(() => {
+      idleAfterSuccessRef.current = null;
+      setStatus('idle');
+      handledTxHashRef.current = undefined;
+    }, 2800);
+  }, [txHash, txConfirmed, txReceipt]);
 
   const feeWei = onChainFee ?? parseEther(WISH_BOX_FEE);
   const feeEthDisplay = formatEther(feeWei);
