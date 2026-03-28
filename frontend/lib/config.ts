@@ -95,6 +95,66 @@ export const PROFILE_CONTRACT_ABI = [
   },
 ] as const;
 
+// ============================================================
+// WISH BOX
+// ============================================================
+// Deploy WishBox.sol and set NEXT_PUBLIC_WISH_BOX_ADDRESS.
+// ============================================================
+export const WISH_BOX_CONTRACT_ADDRESS =
+  (process.env.NEXT_PUBLIC_WISH_BOX_ADDRESS ??
+    '0x0000000000000000000000000000000000000000') as `0x${string}`;
+
+/** Must match `fee` in WishBox.sol (used as fallback before RPC reads). */
+export const WISH_BOX_FEE = '0.00003';
+
+export const WISH_BOX_ABI = [
+  {
+    name: 'createWish',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [{ name: 'category', type: 'string', internalType: 'string' }],
+    outputs: [],
+  },
+  {
+    name: 'totalWishes',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+  },
+  {
+    name: 'getWishes',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [
+      {
+        name: '',
+        type: 'tuple[]',
+        components: [
+          { name: 'creator', type: 'address', internalType: 'address' },
+          { name: 'category', type: 'string', internalType: 'string' },
+          { name: 'timestamp', type: 'uint256', internalType: 'uint256' },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'categoryCount',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: '', type: 'string', internalType: 'string' }],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+  },
+  {
+    name: 'fee',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+  },
+] as const;
+
 export const CONTRACT_ABI = [
   {
     inputs: [],

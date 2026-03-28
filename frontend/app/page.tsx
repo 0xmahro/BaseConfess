@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { sdk }           from '@farcaster/miniapp-sdk';
 import { Header }        from '@/components/Header';
 import { PostConfession } from '@/components/PostConfession';
+import { WishBox } from '@/components/WishBox';
 import { ConfessionFeed } from '@/components/ConfessionFeed';
 
 export default function Home() {
@@ -34,6 +35,8 @@ export default function Home() {
 
         {/* Post confession */}
         <PostConfession />
+
+        <WishBox />
 
         {/* Divider */}
         <div className="flex items-center gap-3">
