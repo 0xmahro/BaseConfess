@@ -11,11 +11,7 @@ import {
 } from 'wagmi';
 import { base } from 'wagmi/chains';
 import { formatEther, parseEther } from 'viem';
-import {
-  WISH_BOX_ABI,
-  WISH_BOX_CONTRACT_ADDRESS,
-  WISH_BOX_FEE,
-} from '@/lib/config';
+import { WISH_BOX_ABI, WISH_BOX_FEE } from '@/lib/config';
 
 const ZERO = '0x0000000000000000000000000000000000000000' as const;
 
@@ -68,7 +64,30 @@ export function WishBox() {
   const chainId = useChainId();
   const wrongChain = isConnected && chainId !== base.id;
 
-  const isConfigured = WISH_BOX_CONTRACT_ADDRESS !== ZERO;
+  /** `undefined` = still loading from /api/wish-box-config */
+  const [contractAddress, setContractAddress] = useState<`0x${string}` | null | undefined>(
+    undefined
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/wish-box-config')
+      .then((res) => res.json() as Promise<{ address: string | null }>)
+      .then((data) => {
+        if (cancelled) return;
+        const a = data.address;
+        setContractAddress(a && a.startsWith('0x') ? (a as `0x${string}`) : null);
+      })
+      .catch(() => {
+        if (!cancelled) setContractAddress(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const configLoading = contractAddress === undefined;
+  const isConfigured = Boolean(contractAddress && contractAddress !== ZERO);
 
   const [wishText, setWishText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<WishCategoryId | null>(null);
@@ -80,21 +99,21 @@ export function WishBox() {
   const { isSuccess: txConfirmed } = useWaitForTransactionReceipt({ hash: txHash });
 
   const { data: totalWishes, refetch: refetchTotal } = useReadContract({
-    address: WISH_BOX_CONTRACT_ADDRESS,
+    address: contractAddress ?? ZERO,
     abi: WISH_BOX_ABI,
     functionName: 'totalWishes',
     query: { enabled: isConfigured },
   });
 
   const { data: wishesData, refetch: refetchWishes } = useReadContract({
-    address: WISH_BOX_CONTRACT_ADDRESS,
+    address: contractAddress ?? ZERO,
     abi: WISH_BOX_ABI,
     functionName: 'getWishes',
     query: { enabled: isConfigured },
   });
 
   const { data: onChainFee, refetch: refetchFee } = useReadContract({
-    address: WISH_BOX_CONTRACT_ADDRESS,
+    address: contractAddress ?? ZERO,
     abi: WISH_BOX_ABI,
     functionName: 'fee',
     query: { enabled: isConfigured },
@@ -103,12 +122,12 @@ export function WishBox() {
   const categoryContracts = useMemo(
     () =>
       WISH_CATEGORIES.map((c) => ({
-        address: WISH_BOX_CONTRACT_ADDRESS,
+        address: contractAddress ?? ZERO,
         abi: WISH_BOX_ABI,
         functionName: 'categoryCount' as const,
         args: [c.id] as const,
       })),
-    []
+    [contractAddress]
   );
 
   const { data: categoryCountResults, refetch: refetchCategoryCounts } = useReadContracts({
@@ -167,12 +186,13 @@ export function WishBox() {
   const feeEthDisplay = formatEther(feeWei);
 
   const handleSubmit = async () => {
-    if (!isConfigured || !selectedCategory || !isConnected || !address || wrongChain) return;
+    if (!contractAddress || !isConfigured || !selectedCategory || !isConnected || !address || wrongChain)
+      return;
     setStatus('pending');
     setErrorMsg('');
     try {
       const hash = await writeContractAsync({
-        address: WISH_BOX_CONTRACT_ADDRESS,
+        address: contractAddress,
         abi: WISH_BOX_ABI,
         functionName: 'createWish',
         args: [selectedCategory],
@@ -191,6 +211,7 @@ export function WishBox() {
 
   const isProcessing = status === 'pending' || status === 'confirming';
   const canSubmit =
+    !configLoading &&
     isConfigured &&
     isConnected &&
     !wrongChain &&
@@ -256,11 +277,12 @@ export function WishBox() {
             </h2>
           </div>
 
-          {!isConfigured && (
+          {!configLoading && !isConfigured && (
             <p className="text-xs font-semibold text-violet-500/90 rounded-2xl bg-violet-50 border border-violet-100 px-3 py-2">
               Deploy <span className="font-mono text-[11px]">WishBox.sol</span> and set{' '}
-              <span className="font-mono text-[11px]">NEXT_PUBLIC_WISH_BOX_ADDRESS</span> to enable wishes on-chain.
-              On Vercel: Project → Settings → Environment Variables → add it for Production → Redeploy.
+              <span className="font-mono text-[11px]">WISH_BOX_ADDRESS</span> or{' '}
+              <span className="font-mono text-[11px]">NEXT_PUBLIC_WISH_BOX_ADDRESS</span> in Vercel → Environment
+              Variables (Production), then <strong>Redeploy</strong>.
             </p>
           )}
 
@@ -279,7 +301,7 @@ export function WishBox() {
               value={wishText}
               onChange={(e) => setWishText(e.target.value)}
               placeholder="Close your eyes, make a wish… (for you only — not stored on-chain)"
-              disabled={isProcessing || wrongChain}
+              disabled={isProcessing}
               rows={3}
               maxLength={MAX_WISH_CHARS}
               className="w-full resize-none rounded-2xl border border-violet-200/80 px-4 py-3 pb-7 text-sm text-ink placeholder-violet-300 font-medium bg-violet-50/40 outline-none transition-all duration-200 focus:border-violet-400 focus:ring-2 focus:ring-violet-100 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -302,7 +324,7 @@ export function WishBox() {
                   <button
                     key={cat.id}
                     type="button"
-                    disabled={isProcessing || wrongChain}
+                    disabled={isProcessing}
                     onClick={() => setSelectedCategory(cat.id)}
                     className={`
                       rounded-2xl px-3 py-2.5 text-xs font-extrabold transition-all duration-200 border
@@ -364,6 +386,14 @@ export function WishBox() {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
                 {status === 'pending' ? 'Waiting for wallet…' : 'Confirming on Base…'}
+              </>
+            ) : configLoading ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                Loading wish box…
               </>
             ) : !isConfigured ? (
               'Wish Box not configured'

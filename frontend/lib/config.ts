@@ -98,7 +98,7 @@ export const PROFILE_CONTRACT_ABI = [
 // ============================================================
 // WISH BOX
 // ============================================================
-// Deploy WishBox.sol and set NEXT_PUBLIC_WISH_BOX_ADDRESS.
+// Deploy WishBox.sol; set WISH_BOX_ADDRESS or NEXT_PUBLIC_WISH_BOX_ADDRESS (see /api/wish-box-config).
 // ============================================================
 export const WISH_BOX_CONTRACT_ADDRESS =
   (process.env.NEXT_PUBLIC_WISH_BOX_ADDRESS ??
