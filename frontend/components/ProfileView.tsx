@@ -10,8 +10,12 @@ import {
   PROFILE_CONTRACT_ADDRESS,
   PROFILE_CREATION_FEE,
   USERNAME_CHANGE_FEE,
+  WISH_BOX_ABI,
 } from '@/lib/config';
+import { useWishBoxContractAddress } from '@/hooks/useWishBoxContractAddress';
 import type { Confession } from '@/types';
+
+const ADDR_ZERO = '0x0000000000000000000000000000000000000000' as const;
 
 function isWalletAddress(s: string): s is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(s);
@@ -45,6 +49,21 @@ export function ProfileView({ targetAddress }: { targetAddress: string }) {
 
   const isMissingContract =
     PROFILE_CONTRACT_ADDRESS === '0x0000000000000000000000000000000000000000';
+
+  const { address: wishBoxAddress, isConfigured: wishBoxConfigured } = useWishBoxContractAddress();
+
+  const { data: wishesOnChain, isPending: wishesPending } = useReadContract({
+    address: wishBoxAddress ?? ADDR_ZERO,
+    abi: WISH_BOX_ABI,
+    functionName: 'getWishes',
+    query: { enabled: mounted && isValid && wishBoxConfigured && Boolean(wishBoxAddress) },
+  });
+
+  const wishCountForProfile = useMemo(() => {
+    if (!wishesOnChain || !isValid) return null;
+    const rows = wishesOnChain as unknown as readonly { creator: `0x${string}` }[];
+    return rows.filter((w) => w.creator.toLowerCase() === profileAddress).length;
+  }, [wishesOnChain, profileAddress, isValid]);
 
   const { data: profileData, refetch: refetchProfile } = useReadContract({
     address: PROFILE_CONTRACT_ADDRESS,
@@ -336,8 +355,14 @@ export function ProfileView({ targetAddress }: { targetAddress: string }) {
             <p className="text-xl font-extrabold text-ink">{tipsReceivedEth.toFixed(4)} ETH</p>
           </div>
           <div className="rounded-2xl border border-pink-200 bg-white p-4">
-            <p className="text-[11px] font-extrabold text-mauve">Total spent</p>
-            <p className="text-xl font-extrabold text-ink">{totalSpentEth.toFixed(4)} ETH</p>
+            <p className="text-[11px] font-extrabold text-mauve">Wishes</p>
+            <p className="text-xl font-extrabold text-ink">
+              {!wishBoxConfigured
+                ? '—'
+                : wishesPending
+                  ? '…'
+                  : wishCountForProfile ?? 0}
+            </p>
           </div>
           <div className="rounded-2xl border border-pink-200 bg-white p-4">
             <p className="text-[11px] font-extrabold text-mauve">Confessions</p>
