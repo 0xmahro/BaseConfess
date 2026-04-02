@@ -13,6 +13,52 @@ export const CONTRACT_ADDRESS =
 export const CONFESSION_FEE = '0.000025'; // ETH — must match confessionFee in contract
 
 // ============================================================
+// LOVE METER
+// ============================================================
+export const LOVE_METER_CONTRACT_ADDRESS =
+  (process.env.NEXT_PUBLIC_LOVE_METER_ADDRESS ??
+    '0xd9145CCE52D386f254917e481eB44e9943F39138') as `0x${string}`;
+
+export const LOVE_METER_ABI = [
+  {
+    name: 'fee',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+  },
+  {
+    name: 'owner',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address', internalType: 'address' }],
+  },
+  {
+    name: 'test',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'name1', type: 'string', internalType: 'string' },
+      { name: 'name2', type: 'string', internalType: 'string' },
+    ],
+    outputs: [{ name: 'percent', type: 'uint8', internalType: 'uint8' }],
+  },
+  {
+    name: 'LoveTested',
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      { name: 'user', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'name1Hash', type: 'bytes32', indexed: true, internalType: 'bytes32' },
+      { name: 'name2Hash', type: 'bytes32', indexed: true, internalType: 'bytes32' },
+      { name: 'percent', type: 'uint8', indexed: false, internalType: 'uint8' },
+      { name: 'paid', type: 'uint256', indexed: false, internalType: 'uint256' },
+    ],
+  },
+] as const;
+
+// ============================================================
 // PROFILE SYSTEM CONFIGURATION
 // ============================================================
 // Deploy ProfileSystem.sol and set this address.

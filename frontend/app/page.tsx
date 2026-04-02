@@ -8,7 +8,7 @@ import { PostConfession } from '@/components/PostConfession';
 import { WishBox } from '@/components/WishBox';
 import { ConfessionFeed } from '@/components/ConfessionFeed';
 
-type HomeTab = 'confess' | 'wish';
+type HomeTab = 'confess' | 'wish' | 'love';
 
 export default function Home() {
   const [tab, setTab] = useState<HomeTab>('confess');
@@ -22,7 +22,7 @@ export default function Home() {
       <Header />
 
       <main className="max-w-lg mx-auto px-4 py-8 space-y-6">
-        <div className="flex justify-center">
+        <div className="flex flex-wrap justify-center gap-3">
           <Link
             href="/profile"
             className="inline-flex items-center justify-center gap-2 py-2.5 px-6 rounded-2xl text-sm font-extrabold
@@ -38,7 +38,7 @@ export default function Home() {
         <div
           className="flex p-1 rounded-2xl bg-white/90 border border-pink-200 shadow-card gap-1"
           role="tablist"
-          aria-label="Choose Confess or Wish Box"
+          aria-label="Choose Confess, Wish Box, or Love Meter"
         >
           <button
             type="button"
@@ -73,6 +73,23 @@ export default function Home() {
           >
             <span className="text-base leading-none">✨</span>
             Wish Box
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'love'}
+            onClick={() => setTab('love')}
+            className={`
+              flex-1 flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl text-sm font-extrabold
+              transition-all duration-200 active:scale-[0.98]
+              ${tab === 'love'
+                ? 'bg-gradient-to-r from-fuchsia-500 to-indigo-500 text-white shadow-[0_4px_16px_rgba(99,102,241,0.30)]'
+                : 'text-mauve hover:text-fuchsia-600 hover:bg-fuchsia-50/60'
+              }
+            `}
+          >
+            <span className="text-base leading-none">💗</span>
+            Love Meter
           </button>
         </div>
 
@@ -123,6 +140,34 @@ export default function Home() {
             </div>
 
             <WishBox />
+          </div>
+        )}
+
+        {tab === 'love' && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="text-center space-y-3 pt-1">
+              <div className="text-5xl animate-float">💗</div>
+              <h1 className="text-2xl font-extrabold bg-gradient-to-r from-fuchsia-600 to-indigo-600 bg-clip-text text-transparent tracking-tight">
+                Love Meter
+              </h1>
+              <p className="text-sm text-indigo-600/80 font-semibold max-w-xs mx-auto leading-relaxed">
+                Run an on-chain love test on Base.<br />Random score · Paid with ETH.
+              </p>
+              <div className="inline-flex items-center gap-1.5 bg-white border border-indigo-200 rounded-full px-3 py-1.5 text-xs font-bold text-indigo-600 shadow-sm">
+                <span>⛓</span>
+                <span>On Base · Love Meter</span>
+              </div>
+            </div>
+
+            <Link
+              href="/ask"
+              className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-2xl text-sm font-extrabold
+                border-2 border-indigo-200 bg-white text-indigo-600 shadow-sm
+                hover:bg-indigo-50 hover:border-indigo-300 hover:shadow-card transition-all duration-200 active:scale-[0.98]"
+            >
+              <span className="text-base leading-none" aria-hidden>💘</span>
+              Open Love Meter
+            </Link>
           </div>
         )}
       </main>
