@@ -28,7 +28,7 @@ function loveMeterShare(
   const base = appBaseUrl.replace(/\/$/, '');
   const pageUrl = `${base}/ask`;
   const headline = '💗 BaseConfess · Love Meter';
-  const pairLine = `${nameA} × ${nameB}`;
+  const pairLine = `${nameA} & ${nameB}`;
 
   const whatsappBody = [
     headline,
@@ -316,7 +316,7 @@ export default function AskTestPage() {
             <div>
               <h2 className="text-2xl sm:text-3xl font-black text-ink">
                 <span className="text-ink">{name1.trim()}</span>{' '}
-                <span className="text-violet-400 font-extrabold">+</span>{' '}
+                <span className="text-violet-400 font-extrabold">&</span>{' '}
                 <span className="text-ink">{name2.trim()}</span>
               </h2>
               <p className="mt-2 text-lg font-black text-fuchsia-500">
