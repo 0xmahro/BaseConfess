@@ -17,7 +17,7 @@ export const CONFESSION_FEE = '0.000025'; // ETH — must match confessionFee in
 // ============================================================
 export const LOVE_METER_CONTRACT_ADDRESS =
   (process.env.NEXT_PUBLIC_LOVE_METER_ADDRESS ??
-    '0xd9145CCE52D386f254917e481eB44e9943F39138') as `0x${string}`;
+    '0x8765bd20c3cC2bCa9e9E42f40447FC0D09e54FA3') as `0x${string}`;
 
 export const LOVE_METER_ABI = [
   {
