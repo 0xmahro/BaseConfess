@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import {
@@ -15,11 +15,60 @@ import { base, baseSepolia } from 'wagmi/chains';
 import { decodeEventLog, formatEther } from 'viem';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { LOVE_METER_ABI, LOVE_METER_CONTRACT_ADDRESS } from '@/lib/config';
+import { useMiniApp } from '@/hooks/useMiniApp';
+
+const DEFAULT_APP_URL = 'https://baseconfess.fun';
+
+function loveMeterShare(
+  appBaseUrl: string,
+  nameA: string,
+  nameB: string,
+  score: number
+) {
+  const base = appBaseUrl.replace(/\/$/, '');
+  const pageUrl = `${base}/ask`;
+  const headline = '💗 BaseConfess · Love Meter';
+  const pairLine = `${nameA} × ${nameB}`;
+
+  const whatsappBody = [
+    headline,
+    '',
+    pairLine,
+    `${score}% compatibility · settled on-chain on Base`,
+    '',
+    pageUrl,
+  ].join('\n');
+
+  const tweetBody = [
+    headline,
+    '',
+    pairLine,
+    `${score}% · on-chain on Base`,
+  ].join('\n');
+
+  const castBody = [
+    headline,
+    '',
+    pairLine,
+    `${score}% · on-chain on Base`,
+  ].join('\n');
+
+  const tweetHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetBody)}&url=${encodeURIComponent(pageUrl)}&hashtags=BaseConfess,Base,onchain`;
+
+  const waHref = `https://wa.me/?text=${encodeURIComponent(whatsappBody)}`;
+
+  const warpcastComposeHref = `https://warpcast.com/~/compose?text=${encodeURIComponent(
+    `${castBody}\n\n${pageUrl}`
+  )}`;
+
+  return { pageUrl, tweetHref, waHref, warpcastComposeHref, castBody };
+}
 
 export default function AskTestPage() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const publicClient = usePublicClient();
+  const { isMiniApp } = useMiniApp();
 
   const [name1, setName1] = useState('');
   const [name2, setName2] = useState('');
@@ -137,12 +186,28 @@ export default function AskTestPage() {
     resultCommitted.current = false;
   };
 
-  const shareText =
-    percent != null
-      ? `${name1.trim()} + ${name2.trim()} — Love Meter: ${percent}%`
-      : '';
-  const waHref = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
-  const tweetHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
+  const appBaseUrl = process.env.NEXT_PUBLIC_URL ?? DEFAULT_APP_URL;
+
+  const share = useMemo(() => {
+    if (percent == null) return null;
+    return loveMeterShare(appBaseUrl, name1.trim(), name2.trim(), percent);
+  }, [appBaseUrl, percent, name1, name2]);
+
+  const openFarcasterShare = async () => {
+    if (!share) return;
+    if (isMiniApp) {
+      try {
+        await sdk.actions.composeCast({
+          text: share.castBody,
+          embeds: [share.pageUrl],
+        });
+      } catch {
+        window.open(share.warpcastComposeHref, '_blank', 'noopener,noreferrer');
+      }
+    } else {
+      window.open(share.warpcastComposeHref, '_blank', 'noopener,noreferrer');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#e4dcfa] relative overflow-x-hidden">
@@ -266,24 +331,38 @@ export default function AskTestPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <a
-                href={waHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-2xl bg-[#25D366] px-5 py-3 text-white font-bold text-sm shadow-md hover:brightness-105"
-              >
-                WhatsApp
-              </a>
-              <a
-                href={tweetHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-indigo-600 font-extrabold text-sm underline-offset-2 hover:underline"
-              >
-                Tweet
-              </a>
-            </div>
+            {share && (
+              <div className="flex flex-col items-stretch gap-3 max-w-sm mx-auto w-full">
+                <p className="text-center text-[11px] font-extrabold uppercase tracking-widest text-violet-400/90">
+                  Share result
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <a
+                    href={share.waHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex flex-1 min-w-[7.5rem] justify-center items-center gap-2 rounded-2xl bg-[#25D366] px-4 py-3 text-white font-bold text-sm shadow-md hover:brightness-105"
+                  >
+                    WhatsApp
+                  </a>
+                  <a
+                    href={share.tweetHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex flex-1 min-w-[7.5rem] justify-center items-center gap-2 rounded-2xl bg-[#0f1419] px-4 py-3 text-white font-bold text-sm shadow-md hover:bg-black/90"
+                  >
+                    Post on X
+                  </a>
+                  <button
+                    type="button"
+                    onClick={openFarcasterShare}
+                    className="inline-flex flex-1 min-w-[7.5rem] justify-center items-center gap-2 rounded-2xl bg-[#6A3CFF] px-4 py-3 text-white font-bold text-sm shadow-md hover:brightness-110"
+                  >
+                    Cast
+                  </button>
+                </div>
+              </div>
+            )}
 
             <button
               type="button"
