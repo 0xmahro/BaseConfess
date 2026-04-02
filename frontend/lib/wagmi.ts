@@ -6,7 +6,7 @@ import {
   injectedWallet,
 } from '@rainbow-me/rainbowkit/wallets';
 import { createConfig, http } from 'wagmi';
-import { base, baseSepolia } from 'wagmi/chains';
+import { base } from 'wagmi/chains';
 import { farcasterMiniApp } from '@farcaster/miniapp-wagmi-connector';
 
 const rainbowConnectors = connectorsForWallets(
@@ -27,10 +27,9 @@ export const wagmiConfig = createConfig({
     farcasterMiniApp(),
     ...rainbowConnectors,
   ],
-  chains: [base, baseSepolia],
+  chains: [base],
   transports: {
     [base.id]:        http(),
-    [baseSepolia.id]: http(),
   },
   // ssr: false (default) uses localStorage — connection persists across refreshes
 });

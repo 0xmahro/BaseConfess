@@ -11,7 +11,7 @@ import {
   useWriteContract,
   useWaitForTransactionReceipt,
 } from 'wagmi';
-import { base, baseSepolia } from 'wagmi/chains';
+import { base } from 'wagmi/chains';
 import { decodeEventLog, formatEther } from 'viem';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { LOVE_METER_ABI, LOVE_METER_CONTRACT_ADDRESS } from '@/lib/config';
@@ -134,8 +134,7 @@ export default function AskTestPage() {
     })();
   }, [isSuccess, txHash, publicClient]);
 
-  const supportedChain = chainId === base.id || chainId === baseSepolia.id;
-  const wrongChain = !supportedChain;
+  const wrongChain = chainId !== base.id;
   const busy = isWriting || isConfirming;
 
   const runTest = async () => {
@@ -151,7 +150,7 @@ export default function AskTestPage() {
       return;
     }
     if (wrongChain) {
-      setError('Switch to Base (or Base Sepolia).');
+      setError('Switch to Base Mainnet.');
       return;
     }
     if (!feeWei) {
@@ -210,13 +209,16 @@ export default function AskTestPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#e4dcfa] relative overflow-x-hidden">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.12]"
-        aria-hidden
-      >
-        <div className="absolute top-20 left-[8%] w-32 h-32 rounded-full bg-violet-400 blur-2xl" />
-        <div className="absolute bottom-40 right-[10%] w-40 h-40 rounded-full bg-pink-400 blur-3xl" />
+    <div className="min-h-screen relative overflow-x-hidden bg-gradient-to-b from-[#efe9ff] via-[#e8e0ff] to-[#f7dff1]">
+      <div className="pointer-events-none absolute inset-0" aria-hidden>
+        <div className="absolute -top-24 left-[-15%] w-[26rem] h-[26rem] rounded-full bg-fuchsia-400/40 blur-3xl" />
+        <div className="absolute top-24 right-[-20%] w-[30rem] h-[30rem] rounded-full bg-indigo-400/40 blur-3xl" />
+        <div className="absolute bottom-[-10rem] left-[10%] w-[28rem] h-[28rem] rounded-full bg-pink-300/40 blur-3xl" />
+
+        <div className="absolute top-20 left-[12%] text-white/40 text-2xl rotate-[-12deg]">💗</div>
+        <div className="absolute top-36 right-[18%] text-white/35 text-3xl rotate-[10deg]">💞</div>
+        <div className="absolute bottom-44 left-[18%] text-white/35 text-3xl rotate-[6deg]">💘</div>
+        <div className="absolute bottom-28 right-[14%] text-white/40 text-2xl rotate-[-8deg]">✨</div>
       </div>
 
       <header className="relative z-10 flex items-center justify-between px-4 pt-4 max-w-lg mx-auto">
@@ -233,37 +235,53 @@ export default function AskTestPage() {
         />
       </header>
 
-      <main className="relative z-10 max-w-lg mx-auto px-4 pb-16 pt-6">
+      <main className="relative z-10 max-w-lg mx-auto px-4 pb-16 pt-8">
         {step === 'form' && (
           <div className="space-y-6 animate-fade-in">
             <div className="text-center space-y-2">
               <h1 className="text-4xl font-black tracking-tight bg-gradient-to-r from-pink-500 via-fuchsia-500 to-indigo-500 bg-clip-text text-transparent drop-shadow-sm">
                 LOVE METER
               </h1>
-              <p className="text-sm font-bold text-indigo-600/90">
+              <p className="text-sm font-black text-indigo-600/90">
                 On-chain on Base ·{' '}
                 {feeWei ? `${formatEther(feeWei)} ETH` : '…'}
               </p>
+              <p className="text-[12px] font-bold text-indigo-600/70">
+                Two names in. One transaction. A score you can share.
+              </p>
             </div>
 
-            <div className="bg-white rounded-[2rem] rounded-b-3xl shadow-[0_8px_40px_rgba(99,102,241,0.12)] border border-white/80 p-5 sm:p-6 space-y-5">
+            <div className="bg-white/80 backdrop-blur-sm rounded-[2rem] shadow-[0_14px_70px_rgba(76,29,149,0.16)] border border-white/70 p-5 sm:p-6 space-y-5 overflow-hidden">
+              <div className="flex items-center justify-center gap-2">
+                <span className="inline-flex items-center justify-center w-9 h-9 rounded-2xl bg-gradient-to-br from-fuchsia-500 to-indigo-500 text-white shadow-md">
+                  💗
+                </span>
+                <span className="text-xs font-extrabold uppercase tracking-widest text-indigo-700/70">
+                  Enter names
+                </span>
+              </div>
+
               <div className="flex flex-col sm:flex-row gap-3">
-                <input
-                  type="text"
-                  value={name1}
-                  onChange={(e) => setName1(e.target.value)}
-                  placeholder="You"
-                  maxLength={40}
-                  className="flex-1 rounded-full border-2 border-violet-100 bg-white px-5 py-3.5 text-ink font-bold placeholder:text-mauve/60 focus:outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/60"
-                />
-                <input
-                  type="text"
-                  value={name2}
-                  onChange={(e) => setName2(e.target.value)}
-                  placeholder="Partner"
-                  maxLength={40}
-                  className="flex-1 rounded-full border-2 border-violet-100 bg-white px-5 py-3.5 text-ink font-bold placeholder:text-mauve/60 focus:outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/60"
-                />
+                <div className="flex-1 min-w-0">
+                  <input
+                    type="text"
+                    value={name1}
+                    onChange={(e) => setName1(e.target.value)}
+                    placeholder="You"
+                    maxLength={40}
+                    className="w-full rounded-full border-2 border-violet-100 bg-white px-5 py-3.5 text-ink font-black placeholder:text-mauve/60 focus:outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/60"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <input
+                    type="text"
+                    value={name2}
+                    onChange={(e) => setName2(e.target.value)}
+                    placeholder="Partner"
+                    maxLength={40}
+                    className="w-full rounded-full border-2 border-violet-100 bg-white px-5 py-3.5 text-ink font-black placeholder:text-mauve/60 focus:outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/60"
+                  />
+                </div>
               </div>
 
               {error && (
@@ -276,7 +294,7 @@ export default function AskTestPage() {
                 type="button"
                 onClick={runTest}
                 disabled={busy}
-                className="w-full rounded-full py-4 font-black text-white text-lg shadow-lg bg-gradient-to-r from-violet-600 via-fuchsia-500 to-indigo-500 hover:opacity-95 active:scale-[0.99] transition-all disabled:opacity-50 disabled:pointer-events-none"
+                className="w-full rounded-full py-4 font-black text-white text-lg shadow-[0_14px_50px_rgba(99,102,241,0.35)] bg-gradient-to-r from-violet-600 via-fuchsia-500 to-indigo-500 hover:brightness-105 active:scale-[0.99] transition-all disabled:opacity-50 disabled:pointer-events-none"
               >
                 {busy
                   ? isConfirming
@@ -284,6 +302,11 @@ export default function AskTestPage() {
                     : 'Wallet…'
                   : 'Run Love Meter'}
               </button>
+
+              <div className="flex items-center justify-center gap-2 text-[11px] font-extrabold text-indigo-700/55">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-300" />
+                <span>No storage · Names stay on your device</span>
+              </div>
             </div>
           </div>
         )}
