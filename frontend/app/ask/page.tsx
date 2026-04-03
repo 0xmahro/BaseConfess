@@ -12,7 +12,12 @@ import {
   useWaitForTransactionReceipt,
 } from 'wagmi';
 import { base } from 'wagmi/chains';
-import { decodeEventLog, formatEther, parseAbiItem } from 'viem';
+import {
+  decodeEventLog,
+  formatEther,
+  parseAbiItem,
+  type PublicClient,
+} from 'viem';
 import { sdk } from '@farcaster/miniapp-sdk';
 import {
   LOVE_METER_ABI,
@@ -30,6 +35,27 @@ const BLOCKS_24H_APPROX = BigInt(45000);
 const loveTestedEvent = parseAbiItem(
   'event LoveTested(address indexed user, bytes32 indexed name1Hash, bytes32 indexed name2Hash, uint8 percent, uint256 paid)'
 );
+
+/** First block where contract bytecode exists (for event scans when env deploy block is unset). */
+async function findLoveMeterDeploymentBlock(
+  client: PublicClient,
+  contract: `0x${string}`,
+  latest: bigint
+): Promise<bigint | null> {
+  const codeNow = await client.getBytecode({ address: contract });
+  if (!codeNow || codeNow === '0x') return null;
+
+  let low = BigInt(0);
+  let high = latest;
+  while (low < high) {
+    const mid = low + (high - low) / BigInt(2);
+    const code = await client.getBytecode({ address: contract, blockNumber: mid });
+    const exists = Boolean(code && code !== '0x');
+    if (exists) high = mid;
+    else low = mid + BigInt(1);
+  }
+  return low;
+}
 
 function formatMeasurementCount(n: number): string {
   return new Intl.NumberFormat('en-US').format(n);
@@ -166,6 +192,11 @@ export default function AskTestPage() {
   const [last24hCount, setLast24hCount] = useState<number | null>(null);
   const [last24hLoading, setLast24hLoading] = useState(false);
   const [statsTick, setStatsTick] = useState(0);
+  /** `undefined` = not resolved yet; `false` = lookup failed; `bigint` = first block with code */
+  const [inferredDeployBlock, setInferredDeployBlock] = useState<
+    bigint | false | undefined
+  >(undefined);
+  const [inferDeployLoading, setInferDeployLoading] = useState(false);
   const hasOnChainCounterRef = useRef(false);
 
   const loveMeterDeployBlock = getLoveMeterDeployBlock();
@@ -196,12 +227,66 @@ export default function AskTestPage() {
   const hasContractCounter = typeof totalTestsWei === 'bigint';
   hasOnChainCounterRef.current = hasContractCounter;
 
+  const effectiveDeployBlock =
+    loveMeterDeployBlock ??
+    (typeof inferredDeployBlock === 'bigint' ? inferredDeployBlock : null);
+
   useEffect(() => {
     if (chainId !== base.id || !publicClient) return;
     if (typeof totalTestsWei === 'bigint') return;
     if (totalTestsPending || totalTestsFetching) return;
     if (!totalTestsReadError) return;
-    if (loveMeterDeployBlock == null) return;
+    if (loveMeterDeployBlock != null) return;
+    if (inferredDeployBlock !== undefined) return;
+
+    let cancelled = false;
+    setInferDeployLoading(true);
+
+    (async () => {
+      try {
+        const latest = await publicClient.getBlockNumber();
+        const first = await findLoveMeterDeploymentBlock(
+          publicClient,
+          LOVE_METER_CONTRACT_ADDRESS,
+          latest
+        );
+        if (!cancelled) setInferredDeployBlock(first != null ? first : false);
+      } catch {
+        if (!cancelled) setInferredDeployBlock(false);
+      } finally {
+        if (!cancelled) setInferDeployLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    chainId,
+    publicClient,
+    totalTestsWei,
+    totalTestsReadError,
+    totalTestsPending,
+    totalTestsFetching,
+    loveMeterDeployBlock,
+    inferredDeployBlock,
+  ]);
+
+  useEffect(() => {
+    if (chainId !== base.id || !publicClient) return;
+    if (typeof totalTestsWei === 'bigint') return;
+    if (totalTestsPending || totalTestsFetching) return;
+    if (!totalTestsReadError) return;
+
+    if (effectiveDeployBlock == null) {
+      if (inferDeployLoading || inferredDeployBlock === undefined) {
+        setEventCountLoading(true);
+        return;
+      }
+      setEventBackedCount(null);
+      setEventCountLoading(false);
+      return;
+    }
 
     let cancelled = false;
     setEventCountLoading(true);
@@ -209,7 +294,7 @@ export default function AskTestPage() {
     (async () => {
       try {
         const latest = await publicClient.getBlockNumber();
-        let from = loveMeterDeployBlock;
+        let from = effectiveDeployBlock;
         let count = 0;
         while (from <= latest && !cancelled) {
           const to =
@@ -241,7 +326,10 @@ export default function AskTestPage() {
     totalTestsReadError,
     totalTestsPending,
     totalTestsFetching,
-    loveMeterDeployBlock,
+    effectiveDeployBlock,
+    inferDeployLoading,
+    inferredDeployBlock,
+    statsTick,
   ]);
 
   useEffect(() => {
@@ -349,7 +437,8 @@ export default function AskTestPage() {
   const measurementsLoading =
     chainId === base.id &&
     (((totalTestsPending || totalTestsFetching) && !totalTestsReadError) ||
-      eventCountLoading);
+      eventCountLoading ||
+      inferDeployLoading);
 
   const measurementsValue: number | null =
     typeof totalTestsWei === 'bigint' ? Number(totalTestsWei) : eventBackedCount;
