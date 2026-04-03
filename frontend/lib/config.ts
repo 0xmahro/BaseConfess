@@ -19,9 +19,23 @@ export const LOVE_METER_CONTRACT_ADDRESS =
   (process.env.NEXT_PUBLIC_LOVE_METER_ADDRESS ??
     '0x8765bd20c3cC2bCa9e9E42f40447FC0D09e54FA3') as `0x${string}`;
 
+/** Contract creation block on Base (optional). Used to count `LoveTested` logs if `totalTests` is missing on-chain. */
+export function getLoveMeterDeployBlock(): bigint | null {
+  const raw = process.env.NEXT_PUBLIC_LOVE_METER_DEPLOY_BLOCK;
+  if (!raw || !/^\d+$/.test(raw)) return null;
+  return BigInt(raw);
+}
+
 export const LOVE_METER_ABI = [
   {
     name: 'fee',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+  },
+  {
+    name: 'totalTests',
     type: 'function',
     stateMutability: 'view',
     inputs: [],

@@ -12,12 +12,26 @@ import {
   useWaitForTransactionReceipt,
 } from 'wagmi';
 import { base } from 'wagmi/chains';
-import { decodeEventLog, formatEther } from 'viem';
+import { decodeEventLog, formatEther, parseAbiItem } from 'viem';
 import { sdk } from '@farcaster/miniapp-sdk';
-import { LOVE_METER_ABI, LOVE_METER_CONTRACT_ADDRESS } from '@/lib/config';
+import {
+  LOVE_METER_ABI,
+  LOVE_METER_CONTRACT_ADDRESS,
+  getLoveMeterDeployBlock,
+} from '@/lib/config';
 import { useMiniApp } from '@/hooks/useMiniApp';
 
 const DEFAULT_APP_URL = 'https://baseconfess.fun';
+
+const LOG_CHUNK_BLOCKS = BigInt(1999);
+
+const loveTestedEvent = parseAbiItem(
+  'event LoveTested(address indexed user, bytes32 indexed name1Hash, bytes32 indexed name2Hash, uint8 percent, uint256 paid)'
+);
+
+function formatMeasurementCount(n: number): string {
+  return new Intl.NumberFormat('en-US').format(n);
+}
 
 function loveMeterShare(
   appBaseUrl: string,
@@ -77,6 +91,11 @@ export default function AskTestPage() {
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>();
   const [error, setError] = useState('');
   const resultCommitted = useRef(false);
+  const [eventBackedCount, setEventBackedCount] = useState<number | null>(null);
+  const [eventCountLoading, setEventCountLoading] = useState(false);
+  const hasOnChainCounterRef = useRef(false);
+
+  const loveMeterDeployBlock = getLoveMeterDeployBlock();
 
   const { data: feeWei } = useReadContract({
     address: LOVE_METER_CONTRACT_ADDRESS,
@@ -84,6 +103,73 @@ export default function AskTestPage() {
     functionName: 'fee',
     query: { enabled: step === 'form' },
   });
+
+  const {
+    data: totalTestsWei,
+    isError: totalTestsReadError,
+    isFetching: totalTestsFetching,
+    isPending: totalTestsPending,
+    refetch: refetchTotalTests,
+  } = useReadContract({
+    address: LOVE_METER_CONTRACT_ADDRESS,
+    abi: LOVE_METER_ABI,
+    functionName: 'totalTests',
+    query: {
+      enabled: chainId === base.id,
+      retry: false,
+    },
+  });
+
+  const hasContractCounter = typeof totalTestsWei === 'bigint';
+  hasOnChainCounterRef.current = hasContractCounter;
+
+  useEffect(() => {
+    if (chainId !== base.id || !publicClient) return;
+    if (typeof totalTestsWei === 'bigint') return;
+    if (totalTestsPending || totalTestsFetching) return;
+    if (!totalTestsReadError) return;
+    if (loveMeterDeployBlock == null) return;
+
+    let cancelled = false;
+    setEventCountLoading(true);
+
+    (async () => {
+      try {
+        const latest = await publicClient.getBlockNumber();
+        let from = loveMeterDeployBlock;
+        let count = 0;
+        while (from <= latest && !cancelled) {
+          const to =
+            from + LOG_CHUNK_BLOCKS > latest ? latest : from + LOG_CHUNK_BLOCKS;
+          const logs = await publicClient.getLogs({
+            address: LOVE_METER_CONTRACT_ADDRESS,
+            event: loveTestedEvent,
+            fromBlock: from,
+            toBlock: to,
+          });
+          count += logs.length;
+          from = to + BigInt(1);
+        }
+        if (!cancelled) setEventBackedCount(count);
+      } catch {
+        if (!cancelled) setEventBackedCount(null);
+      } finally {
+        if (!cancelled) setEventCountLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    chainId,
+    publicClient,
+    totalTestsWei,
+    totalTestsReadError,
+    totalTestsPending,
+    totalTestsFetching,
+    loveMeterDeployBlock,
+  ]);
 
   const { writeContractAsync, isPending: isWriting } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
@@ -125,6 +211,8 @@ export default function AskTestPage() {
         if (found == null || Number.isNaN(found)) throw new Error('No LoveTested event found');
         setPercent(found);
         setStep('result');
+        if (hasOnChainCounterRef.current) void refetchTotalTests();
+        else setEventBackedCount((c) => (c == null ? 1 : c + 1));
       } catch {
         setError('Could not read result from chain. Please try again.');
         resultCommitted.current = false;
@@ -132,10 +220,22 @@ export default function AskTestPage() {
         setTxHash(undefined);
       }
     })();
-  }, [isSuccess, txHash, publicClient]);
+  }, [isSuccess, txHash, publicClient, refetchTotalTests]);
 
   const wrongChain = chainId !== base.id;
   const busy = isWriting || isConfirming;
+
+  const measurementsLoading =
+    chainId === base.id &&
+    (((totalTestsPending || totalTestsFetching) && !totalTestsReadError) ||
+      eventCountLoading);
+
+  const measurementsValue: number | null =
+    typeof totalTestsWei === 'bigint' ? Number(totalTestsWei) : eventBackedCount;
+
+  const showMeasurementsBadge =
+    chainId === base.id &&
+    (measurementsLoading || measurementsValue !== null);
 
   const runTest = async () => {
     setError('');
@@ -246,6 +346,21 @@ export default function AskTestPage() {
                 On-chain on Base ·{' '}
                 {feeWei ? `${formatEther(feeWei)} ETH` : '…'}
               </p>
+              {showMeasurementsBadge && (
+                <div className="flex justify-center pt-1">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200/90 bg-white/75 px-4 py-2 text-[11px] font-extrabold uppercase tracking-wide text-indigo-800 shadow-sm">
+                    <span aria-hidden>📊</span>
+                    {measurementsLoading ? (
+                      <span>Counting measurements…</span>
+                    ) : measurementsValue !== null ? (
+                      <span>
+                        {formatMeasurementCount(measurementsValue)} measurements
+                        on Base
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              )}
               <p className="text-[12px] font-bold text-indigo-600/70">
                 Two names in. One transaction. A score you can share.
               </p>
@@ -322,6 +437,21 @@ export default function AskTestPage() {
               <p className="mt-2 text-lg font-black text-fuchsia-500">
                 compatibility score
               </p>
+              {showMeasurementsBadge && (
+                <div className="flex justify-center mt-4">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200/90 bg-white/75 px-4 py-2 text-[11px] font-extrabold uppercase tracking-wide text-indigo-800 shadow-sm">
+                    <span aria-hidden>📊</span>
+                    {measurementsLoading ? (
+                      <span>Counting measurements…</span>
+                    ) : measurementsValue !== null ? (
+                      <span>
+                        {formatMeasurementCount(measurementsValue)} measurements
+                        on Base
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-center">
