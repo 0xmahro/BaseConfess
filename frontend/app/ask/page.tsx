@@ -24,6 +24,8 @@ import { useMiniApp } from '@/hooks/useMiniApp';
 const DEFAULT_APP_URL = 'https://baseconfess.fun';
 
 const LOG_CHUNK_BLOCKS = BigInt(1999);
+/** ~24h on Base (~2s blocks) — used only for the 24H stat strip. */
+const BLOCKS_24H_APPROX = BigInt(45000);
 
 const loveTestedEvent = parseAbiItem(
   'event LoveTested(address indexed user, bytes32 indexed name1Hash, bytes32 indexed name2Hash, uint8 percent, uint256 paid)'
@@ -31,6 +33,74 @@ const loveTestedEvent = parseAbiItem(
 
 function formatMeasurementCount(n: number): string {
   return new Intl.NumberFormat('en-US').format(n);
+}
+
+function formatFeeDisplay(wei: bigint): string {
+  const s = formatEther(wei);
+  const [whole, frac = ''] = s.split('.');
+  const trimmed = frac.replace(/0+$/, '').slice(0, 8);
+  return trimmed ? `${whole}.${trimmed}` : whole;
+}
+
+function LoveMeterStatsStrip({
+  total,
+  totalLoading,
+  last24h,
+  last24hLoading,
+  feeWei,
+  feeLoading,
+}: {
+  total: number | null;
+  totalLoading: boolean;
+  last24h: number | null;
+  last24hLoading: boolean;
+  feeWei: bigint | undefined;
+  feeLoading: boolean;
+}) {
+  const cell =
+    'flex flex-col items-center justify-center rounded-2xl border border-violet-100/90 bg-white py-3 px-1.5 min-w-0 shadow-sm';
+
+  return (
+    <div
+      className="w-full max-w-md mx-auto rounded-[1.35rem] border border-violet-100/80 bg-white/95 p-3 shadow-[0_12px_48px_rgba(107,70,193,0.14)]"
+      role="region"
+      aria-label="Love Meter statistics"
+    >
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <div className={cell}>
+          <span className="text-2xl sm:text-3xl font-black text-violet-700 tabular-nums leading-none">
+            {totalLoading ? '…' : total !== null ? formatMeasurementCount(total) : '—'}
+          </span>
+          <span className="mt-2 flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-widest text-violet-400">
+            <span aria-hidden>🌍</span>
+            Total
+          </span>
+        </div>
+        <div className={cell}>
+          <span className="text-2xl sm:text-3xl font-black text-violet-700 tabular-nums leading-none">
+            {last24hLoading ? '…' : last24h !== null ? formatMeasurementCount(last24h) : '—'}
+          </span>
+          <span className="mt-2 flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-widest text-violet-400">
+            <span aria-hidden>⚡</span>
+            24h
+          </span>
+        </div>
+        <div className={`${cell} gap-0.5`}>
+          <span className="flex items-center justify-center gap-1 text-[11px] font-black text-violet-600">
+            <span aria-hidden>💰</span>
+            Fee
+          </span>
+          <span className="text-lg sm:text-xl font-black text-violet-700 tabular-nums leading-tight">
+            {feeLoading || !feeWei ? '…' : formatFeeDisplay(feeWei)}
+          </span>
+          <span className="flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-widest text-violet-400">
+            <span aria-hidden>🔥</span>
+            Base
+          </span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function loveMeterShare(
@@ -93,15 +163,18 @@ export default function AskTestPage() {
   const resultCommitted = useRef(false);
   const [eventBackedCount, setEventBackedCount] = useState<number | null>(null);
   const [eventCountLoading, setEventCountLoading] = useState(false);
+  const [last24hCount, setLast24hCount] = useState<number | null>(null);
+  const [last24hLoading, setLast24hLoading] = useState(false);
+  const [statsTick, setStatsTick] = useState(0);
   const hasOnChainCounterRef = useRef(false);
 
   const loveMeterDeployBlock = getLoveMeterDeployBlock();
 
-  const { data: feeWei } = useReadContract({
+  const { data: feeWei, isPending: feePending } = useReadContract({
     address: LOVE_METER_CONTRACT_ADDRESS,
     abi: LOVE_METER_ABI,
     functionName: 'fee',
-    query: { enabled: step === 'form' },
+    query: { enabled: chainId === base.id },
   });
 
   const {
@@ -171,6 +244,53 @@ export default function AskTestPage() {
     loveMeterDeployBlock,
   ]);
 
+  useEffect(() => {
+    if (chainId !== base.id || !publicClient) return;
+
+    let cancelled = false;
+    setLast24hLoading(true);
+
+    (async () => {
+      try {
+        const latest = await publicClient.getBlockNumber();
+        const approxStart =
+          latest >= BLOCKS_24H_APPROX ? latest - BLOCKS_24H_APPROX : BigInt(0);
+        let from = approxStart;
+        if (loveMeterDeployBlock != null && loveMeterDeployBlock > from) {
+          from = loveMeterDeployBlock;
+        }
+        if (from > latest) {
+          if (!cancelled) setLast24hCount(0);
+          return;
+        }
+
+        let count = 0;
+        let pos = from;
+        while (pos <= latest && !cancelled) {
+          const to =
+            pos + LOG_CHUNK_BLOCKS > latest ? latest : pos + LOG_CHUNK_BLOCKS;
+          const logs = await publicClient.getLogs({
+            address: LOVE_METER_CONTRACT_ADDRESS,
+            event: loveTestedEvent,
+            fromBlock: pos,
+            toBlock: to,
+          });
+          count += logs.length;
+          pos = to + BigInt(1);
+        }
+        if (!cancelled) setLast24hCount(count);
+      } catch {
+        if (!cancelled) setLast24hCount(null);
+      } finally {
+        if (!cancelled) setLast24hLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [chainId, publicClient, loveMeterDeployBlock, statsTick]);
+
   const { writeContractAsync, isPending: isWriting } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash: txHash,
@@ -213,6 +333,7 @@ export default function AskTestPage() {
         setStep('result');
         if (hasOnChainCounterRef.current) void refetchTotalTests();
         else setEventBackedCount((c) => (c == null ? 1 : c + 1));
+        setStatsTick((t) => t + 1);
       } catch {
         setError('Could not read result from chain. Please try again.');
         resultCommitted.current = false;
@@ -233,9 +354,7 @@ export default function AskTestPage() {
   const measurementsValue: number | null =
     typeof totalTestsWei === 'bigint' ? Number(totalTestsWei) : eventBackedCount;
 
-  const showMeasurementsBadge =
-    chainId === base.id &&
-    (measurementsLoading || measurementsValue !== null);
+  const showStatsStrip = chainId === base.id;
 
   const runTest = async () => {
     setError('');
@@ -346,19 +465,16 @@ export default function AskTestPage() {
                 On-chain on Base ·{' '}
                 {feeWei ? `${formatEther(feeWei)} ETH` : '…'}
               </p>
-              {showMeasurementsBadge && (
-                <div className="flex justify-center pt-1">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200/90 bg-white/75 px-4 py-2 text-[11px] font-extrabold uppercase tracking-wide text-indigo-800 shadow-sm">
-                    <span aria-hidden>📊</span>
-                    {measurementsLoading ? (
-                      <span>Counting measurements…</span>
-                    ) : measurementsValue !== null ? (
-                      <span>
-                        {formatMeasurementCount(measurementsValue)} measurements
-                        on Base
-                      </span>
-                    ) : null}
-                  </div>
+              {showStatsStrip && (
+                <div className="pt-3">
+                  <LoveMeterStatsStrip
+                    total={measurementsValue}
+                    totalLoading={measurementsLoading}
+                    last24h={last24hCount}
+                    last24hLoading={last24hLoading}
+                    feeWei={feeWei}
+                    feeLoading={feePending}
+                  />
                 </div>
               )}
               <p className="text-[12px] font-bold text-indigo-600/70">
@@ -437,19 +553,16 @@ export default function AskTestPage() {
               <p className="mt-2 text-lg font-black text-fuchsia-500">
                 compatibility score
               </p>
-              {showMeasurementsBadge && (
-                <div className="flex justify-center mt-4">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200/90 bg-white/75 px-4 py-2 text-[11px] font-extrabold uppercase tracking-wide text-indigo-800 shadow-sm">
-                    <span aria-hidden>📊</span>
-                    {measurementsLoading ? (
-                      <span>Counting measurements…</span>
-                    ) : measurementsValue !== null ? (
-                      <span>
-                        {formatMeasurementCount(measurementsValue)} measurements
-                        on Base
-                      </span>
-                    ) : null}
-                  </div>
+              {showStatsStrip && (
+                <div className="mt-5 px-1">
+                  <LoveMeterStatsStrip
+                    total={measurementsValue}
+                    totalLoading={measurementsLoading}
+                    last24h={last24hCount}
+                    last24hLoading={last24hLoading}
+                    feeWei={feeWei}
+                    feeLoading={feePending}
+                  />
                 </div>
               )}
             </div>
