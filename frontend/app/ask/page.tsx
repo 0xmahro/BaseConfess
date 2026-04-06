@@ -33,6 +33,9 @@ const LOG_CHUNK_BLOCKS = BigInt(1999);
 /** ~24h on Base (~2s blocks) — used only for the 24H stat strip. */
 const BLOCKS_24H_APPROX = BigInt(45000);
 
+/** If `totalTests()` RPC never settles, fall back to log scan after this long. */
+const TOTAL_TESTS_STALL_MS = 6000;
+
 const loveTestedEvent = parseAbiItem(
   'event LoveTested(address indexed user, bytes32 indexed name1Hash, bytes32 indexed name2Hash, uint8 percent, uint256 paid)'
 );
@@ -198,6 +201,7 @@ export default function AskTestPage() {
     bigint | false | undefined
   >(undefined);
   const [inferDeployLoading, setInferDeployLoading] = useState(false);
+  const [totalTestsStalled, setTotalTestsStalled] = useState(false);
   const hasOnChainCounterRef = useRef(false);
 
   const loveMeterDeployBlock = getLoveMeterDeployBlock();
@@ -221,7 +225,10 @@ export default function AskTestPage() {
     functionName: 'totalTests',
     query: {
       enabled: chainId === base.id,
-      retry: false,
+      retry: 2,
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 4000),
+      staleTime: 20_000,
+      refetchOnWindowFocus: false,
     },
   });
 
@@ -232,11 +239,26 @@ export default function AskTestPage() {
     loveMeterDeployBlock ??
     (typeof inferredDeployBlock === 'bigint' ? inferredDeployBlock : null);
 
+  /** When the view call hangs without error, still run deploy infer + log fallback. */
+  useEffect(() => {
+    if (chainId !== base.id) {
+      setTotalTestsStalled(false);
+      return;
+    }
+    setTotalTestsStalled(false);
+    const t = window.setTimeout(() => {
+      if (typeof totalTestsWei !== 'bigint' && !totalTestsReadError) {
+        setTotalTestsStalled(true);
+      }
+    }, TOTAL_TESTS_STALL_MS);
+    return () => window.clearTimeout(t);
+  }, [chainId, totalTestsWei, totalTestsReadError]);
+
   useEffect(() => {
     if (chainId !== base.id || !publicClient) return;
     if (typeof totalTestsWei === 'bigint') return;
-    if (totalTestsPending || totalTestsFetching) return;
-    if (!totalTestsReadError) return;
+    if ((totalTestsPending || totalTestsFetching) && !totalTestsStalled) return;
+    if (!totalTestsReadError && !totalTestsStalled) return;
     if (loveMeterDeployBlock != null) return;
     if (inferredDeployBlock !== undefined) return;
 
@@ -271,13 +293,14 @@ export default function AskTestPage() {
     totalTestsFetching,
     loveMeterDeployBlock,
     inferredDeployBlock,
+    totalTestsStalled,
   ]);
 
   useEffect(() => {
     if (chainId !== base.id || !publicClient) return;
     if (typeof totalTestsWei === 'bigint') return;
-    if (totalTestsPending || totalTestsFetching) return;
-    if (!totalTestsReadError) return;
+    if ((totalTestsPending || totalTestsFetching) && !totalTestsStalled) return;
+    if (!totalTestsReadError && !totalTestsStalled) return;
 
     if (effectiveDeployBlock == null) {
       if (inferDeployLoading || inferredDeployBlock === undefined) {
@@ -331,6 +354,7 @@ export default function AskTestPage() {
     inferDeployLoading,
     inferredDeployBlock,
     statsTick,
+    totalTestsStalled,
   ]);
 
   useEffect(() => {
@@ -345,8 +369,9 @@ export default function AskTestPage() {
         const approxStart =
           latest >= BLOCKS_24H_APPROX ? latest - BLOCKS_24H_APPROX : BigInt(0);
         let from = approxStart;
-        if (loveMeterDeployBlock != null && loveMeterDeployBlock > from) {
-          from = loveMeterDeployBlock;
+        const deployFloor = effectiveDeployBlock;
+        if (deployFloor != null && deployFloor > from) {
+          from = deployFloor;
         }
         if (from > latest) {
           if (!cancelled) setLast24hCount(0);
@@ -378,7 +403,7 @@ export default function AskTestPage() {
     return () => {
       cancelled = true;
     };
-  }, [chainId, publicClient, loveMeterDeployBlock, statsTick]);
+  }, [chainId, publicClient, effectiveDeployBlock, statsTick]);
 
   const { writeContractAsync, isPending: isWriting } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
@@ -435,11 +460,14 @@ export default function AskTestPage() {
   const wrongChain = chainId !== base.id;
   const busy = isWriting || isConfirming;
 
+  const waitingOnTotalTestsRpc =
+    (totalTestsPending || totalTestsFetching) &&
+    !totalTestsReadError &&
+    !totalTestsStalled;
+
   const measurementsLoading =
     chainId === base.id &&
-    (((totalTestsPending || totalTestsFetching) && !totalTestsReadError) ||
-      eventCountLoading ||
-      inferDeployLoading);
+    (waitingOnTotalTestsRpc || eventCountLoading || inferDeployLoading);
 
   const measurementsValue: number | null =
     typeof totalTestsWei === 'bigint' ? Number(totalTestsWei) : eventBackedCount;
