@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useChainId } from 'wagmi';
 import { base } from 'wagmi/chains';
+import { builderCodeTxOpts } from '@/lib/builderCode';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '@/lib/config';
 import { supabase } from '@/lib/supabase';
 import { TipModal } from './TipModal';
@@ -82,6 +83,7 @@ export function ConfessionCard({ confession, userVote, onVoted, username }: Conf
         abi:          CONTRACT_ABI,
         functionName: 'vote',
         args:         [BigInt(confession.id), voteType],
+        ...builderCodeTxOpts(),
       });
       pendingVoteRef.current = voteType;
       setVoteTxHash(hash);

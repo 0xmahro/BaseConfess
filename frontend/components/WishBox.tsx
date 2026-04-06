@@ -11,6 +11,7 @@ import {
 } from 'wagmi';
 import { base } from 'wagmi/chains';
 import { formatEther, parseEther } from 'viem';
+import { builderCodeTxOpts } from '@/lib/builderCode';
 import { WISH_BOX_ABI, WISH_BOX_FEE } from '@/lib/config';
 
 const ZERO = '0x0000000000000000000000000000000000000000' as const;
@@ -220,6 +221,7 @@ export function WishBox() {
         functionName: 'createWish',
         args: [selectedCategory],
         value: feeWei,
+        ...builderCodeTxOpts(),
       });
       setTxHash(hash);
       setStatus('confirming');

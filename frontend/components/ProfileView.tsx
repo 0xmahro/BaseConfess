@@ -5,6 +5,7 @@ import { useAccount, useReadContract, useWriteContract, useWaitForTransactionRec
 import { formatEther, parseEther } from 'viem';
 import { supabase } from '@/lib/supabase';
 import { ProfileConfessionCard } from '@/components/ProfileConfessionCard';
+import { builderCodeTxOpts } from '@/lib/builderCode';
 import {
   PROFILE_CONTRACT_ABI,
   PROFILE_CONTRACT_ADDRESS,
@@ -220,6 +221,7 @@ export function ProfileView({ targetAddress }: { targetAddress: string }) {
         functionName: 'createProfile',
         args: [memeId.trim(), parsedTags],
         value: parseEther(PROFILE_CREATION_FEE),
+        ...builderCodeTxOpts(),
       });
       setTxHash(hash);
       setStatus('confirming');
@@ -241,6 +243,7 @@ export function ProfileView({ targetAddress }: { targetAddress: string }) {
         abi: PROFILE_CONTRACT_ABI,
         functionName: 'updateTags',
         args: [parsedTags],
+        ...builderCodeTxOpts(),
       });
       setTxHash(hash);
       setStatus('confirming');
@@ -265,6 +268,7 @@ export function ProfileView({ targetAddress }: { targetAddress: string }) {
         functionName: 'updateUsername',
         args: [memeId.trim()],
         value: parseEther(USERNAME_CHANGE_FEE),
+        ...builderCodeTxOpts(),
       });
       setTxHash(hash);
       setStatus('confirming');
@@ -288,6 +292,7 @@ export function ProfileView({ targetAddress }: { targetAddress: string }) {
         functionName: 'sendTip',
         args: [profileAddress as `0x${string}`],
         value: parseEther(tipAmount || '0'),
+        ...builderCodeTxOpts(),
       });
       setTxHash(hash);
       setStatus('confirming');

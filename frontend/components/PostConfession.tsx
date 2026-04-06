@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useChainId } from 'wagmi';
 import { base } from 'wagmi/chains';
 import { keccak256, toBytes, parseEther, parseEventLogs } from 'viem';
+import { builderCodeTxOpts } from '@/lib/builderCode';
 import { CONTRACT_ADDRESS, CONTRACT_ABI, CONFESSION_FEE } from '@/lib/config';
 import { supabase } from '@/lib/supabase';
 
@@ -37,6 +38,7 @@ export function PostConfession() {
         functionName: 'postConfession',
         args:         [confessionHash],
         value:        parseEther(CONFESSION_FEE),
+        ...builderCodeTxOpts(),
       });
       submittedTextRef.current = text.trim();
       setTxHash(hash);

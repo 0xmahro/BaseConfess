@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useChainId } from 'wagmi';
 import { base } from 'wagmi/chains';
 import { parseEther } from 'viem';
+import { builderCodeTxOpts } from '@/lib/builderCode';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '@/lib/config';
 import { supabase } from '@/lib/supabase';
 
@@ -48,6 +49,7 @@ export function TipModal({ confessionId, ownerWallet, onClose }: TipModalProps) 
         functionName: 'tip',
         args:         [BigInt(confessionId)],
         value:        parseEther(finalAmount),
+        ...builderCodeTxOpts(),
       });
       sentAmountRef.current = finalAmount;
       setTxHash(hash);

@@ -19,6 +19,7 @@ import {
   type PublicClient,
 } from 'viem';
 import { sdk } from '@farcaster/miniapp-sdk';
+import { builderCodeTxOpts } from '@/lib/builderCode';
 import {
   LOVE_METER_ABI,
   LOVE_METER_CONTRACT_ADDRESS,
@@ -474,6 +475,7 @@ export default function AskTestPage() {
         functionName: 'test',
         args: [a, b],
         value: feeWei,
+        ...builderCodeTxOpts(),
       });
       setTxHash(hash);
     } catch (err: unknown) {
