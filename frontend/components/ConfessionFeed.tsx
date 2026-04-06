@@ -18,6 +18,9 @@ const SORT_TABS: { key: SortKey; label: string; emoji: string }[] = [
 
 const PAGE_SIZE = 30;
 
+/** Rows loaded for sorting/pagination; real total can be higher (see totalCount). */
+const FEED_FETCH_LIMIT = 2000;
+
 function sortConfessions(list: Confession[], key: SortKey): Confession[] {
   const copy = [...list];
   switch (key) {
@@ -135,16 +138,25 @@ export function ConfessionFeed() {
   const [error,       setError]       = useState('');
   const [sortKey,     setSortKey]     = useState<SortKey>('newest');
   const [page,        setPage]        = useState(1);
+  const [totalCount,  setTotalCount]  = useState<number | null>(null);
 
   const fetchConfessions = useCallback(async () => {
-    const { data, error: err } = await supabase
-      .from('confessions')
-      .select('*')
-      .order('id', { ascending: false })
-      .limit(500);
+    const [countRes, rowsRes] = await Promise.all([
+      supabase.from('confessions').select('*', { count: 'exact', head: true }),
+      supabase
+        .from('confessions')
+        .select('*')
+        .order('id', { ascending: false })
+        .limit(FEED_FETCH_LIMIT),
+    ]);
 
-    if (err) { setError('Could not load confessions.'); return; }
-    setConfessions((data as Confession[]) ?? []);
+    if (rowsRes.error) {
+      setError('Could not load confessions.');
+      return;
+    }
+    setError('');
+    setConfessions((rowsRes.data as Confession[]) ?? []);
+    setTotalCount(countRes.count ?? null);
   }, []);
 
   const fetchUserVotes = useCallback(async (wallet: string) => {
@@ -176,6 +188,7 @@ export function ConfessionFeed() {
       .channel('feed_changes')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'confessions' }, (payload) => {
         setConfessions((prev) => [payload.new as Confession, ...prev]);
+        setTotalCount((c) => (c != null ? c + 1 : null));
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'confessions' }, (payload) => {
         setConfessions((prev) =>
@@ -310,7 +323,10 @@ export function ConfessionFeed() {
 
         <div className="flex items-center justify-between px-1">
           <span className="text-xs font-bold text-mauve">
-            {sorted.length} confession{sorted.length !== 1 ? 's' : ''}
+            {(totalCount ?? sorted.length)} confession{(totalCount ?? sorted.length) !== 1 ? 's' : ''}
+            {totalCount != null && totalCount > sorted.length && (
+              <span className="ml-1 text-pink-300">· showing latest {sorted.length}</span>
+            )}
             {totalPages > 1 && (
               <span className="ml-1 text-pink-300">· page {page}/{totalPages}</span>
             )}
