@@ -1,39 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createPublicClient, http, parseAbiItem } from 'viem';
-import { base } from 'viem/chains';
+import { parseEther } from 'viem';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { CONTRACT_ADDRESS } from '@/lib/config';
 
 type Timeframe = 'daily' | 'weekly' | 'all';
-
-const LOG_CHUNK_BLOCKS = BigInt(1999);
-const BLOCKS_24H_APPROX = BigInt(45000);
-
-const evPosted = parseAbiItem(
-  'event ConfessionPosted(uint256 indexed confessionId, address indexed user, bytes32 confessionHash, uint256 timestamp)'
-);
-const evVoted = parseAbiItem(
-  'event ConfessionVoted(uint256 indexed confessionId, address indexed voter, int8 vote)'
-);
-const evTipped = parseAbiItem(
-  'event ConfessionTipped(uint256 indexed confessionId, address indexed from, address indexed to, uint256 amount)'
-);
 
 function parseTimeframe(v: string | null): Timeframe {
   if (v === 'daily' || v === 'weekly' || v === 'all') return v;
   return 'weekly';
-}
-
-function rpcUrl() {
-  return process.env.BASE_RPC_URL ?? 'https://mainnet.base.org';
-}
-
-function legacyContractAddress(): `0x${string}` | null {
-  const raw = (process.env.LEGACY_CONFESSIONS_ADDRESS ?? '').trim();
-  if (!raw) return null;
-  // Minimal validation: 0x + 40 hex chars
-  if (!/^0x[0-9a-fA-F]{40}$/.test(raw)) return null;
-  return raw as `0x${string}`;
 }
 
 function requireSecret(req: Request) {
@@ -57,108 +30,32 @@ type Acc = {
   user: string;
   confessionCount: number;
   likes: number;
-  tipsWei: string; // bigint as string for JSON
+  tipsWei: string;
   score: number;
 };
 
-function mergeAcc(into: Map<string, Acc>, add: Acc) {
-  const key = add.user.toLowerCase();
-  const cur = into.get(key);
+function touch(map: Map<string, Acc>, addr: string): Acc {
+  const key = addr.toLowerCase();
+  const cur = map.get(key);
   if (!cur) {
-    into.set(key, { ...add, user: key });
-    return;
+    const next: Acc = {
+      user: key,
+      confessionCount: 0,
+      likes: 0,
+      tipsWei: '0',
+      score: 0,
+    };
+    map.set(key, next);
+    return next;
   }
-  cur.confessionCount += add.confessionCount;
-  cur.likes += add.likes;
-  cur.tipsWei = (BigInt(cur.tipsWei) + BigInt(add.tipsWei)).toString();
-  cur.score += add.score;
+  return cur;
 }
 
-async function scanContract(opts: {
-  // PublicClient typing varies by chain (e.g. deposit txs on Base). Keep this helper generic.
-  client: any;
-  address: `0x${string}`;
-  fromBlock: bigint;
-  toBlock: bigint;
-}) {
-  const { client, address, fromBlock, toBlock } = opts;
-
-  const acc = new Map<string, Acc>();
-  const touch = (addr: string): Acc => {
-    const a = addr.toLowerCase();
-    const cur = acc.get(a);
-    if (cur) return cur;
-    const next: Acc = { user: a, confessionCount: 0, likes: 0, tipsWei: '0', score: 0 };
-    acc.set(a, next);
-    return next;
-  };
-  const addTips = (a: Acc, amount: bigint) => {
-    const cur = BigInt(a.tipsWei);
-    a.tipsWei = (cur + amount).toString();
-  };
-
-  const confessionOwner = new Map<bigint, string>(); // confessionId -> owner
-  const lastVote = new Map<string, number>(); // `${contract}:${confessionId}:${voter}` -> -1|1
-
-  let from = fromBlock;
-  while (from <= toBlock) {
-    const to = from + LOG_CHUNK_BLOCKS > toBlock ? toBlock : from + LOG_CHUNK_BLOCKS;
-
-    const [postedLogs, votedLogs, tippedLogs] = await Promise.all([
-      client.getLogs({ address, event: evPosted, fromBlock: from, toBlock: to }),
-      client.getLogs({ address, event: evVoted, fromBlock: from, toBlock: to }),
-      client.getLogs({ address, event: evTipped, fromBlock: from, toBlock: to }),
-    ]);
-
-    for (const l of postedLogs) {
-      const args = l.args as any;
-      const confessionId = args.confessionId as bigint;
-      const owner = (args.user as string).toLowerCase();
-      confessionOwner.set(confessionId, owner);
-      const u = touch(owner);
-      u.confessionCount += 1;
-      u.score += 1;
-    }
-
-    for (const l of votedLogs) {
-      const args = l.args as any;
-      const confessionId = args.confessionId as bigint;
-      const voter = (args.voter as string).toLowerCase();
-      const vote = Number(args.vote);
-      if (vote !== 1 && vote !== -1) continue;
-
-      const owner = confessionOwner.get(confessionId);
-      if (!owner) continue;
-      if (owner === voter) continue;
-
-      const k = `${address}:${confessionId.toString()}:${voter}`;
-      const prev = lastVote.get(k);
-      lastVote.set(k, vote);
-
-      if (prev === 1 && vote !== 1) {
-        const u = touch(owner);
-        u.likes = Math.max(0, u.likes - 1);
-        u.score = Math.max(0, u.score - 3);
-      } else if (prev !== 1 && vote === 1) {
-        const u = touch(owner);
-        u.likes += 1;
-        u.score += 3;
-      }
-    }
-
-    for (const l of tippedLogs) {
-      const args = l.args as any;
-      const toAddr = (args.to as string).toLowerCase();
-      const amount = args.amount as bigint;
-      const u = touch(toAddr);
-      addTips(u, amount);
-      u.score += 5;
-    }
-
-    from = to + BigInt(1);
-  }
-
-  return acc;
+function cutoffIso(timeframe: Timeframe): string | null {
+  const now = Date.now();
+  if (timeframe === 'daily') return new Date(now - 24 * 60 * 60 * 1000).toISOString();
+  if (timeframe === 'weekly') return new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+  return null;
 }
 
 export async function POST(req: Request) {
@@ -193,78 +90,82 @@ export async function POST(req: Request) {
   try {
     const url = new URL(req.url);
     const timeframe = parseTimeframe(url.searchParams.get('timeframe'));
+    const cutoff = cutoffIso(timeframe);
+    const sb = supabaseServer();
 
-    const client = createPublicClient({
-      chain: base,
-      transport: http(rpcUrl()),
-    });
-
-    const latest = await client.getBlockNumber();
-    const deployFloorEnv = process.env.CONFESSIONS_DEPLOY_BLOCK;
-    const deployFloor =
-      deployFloorEnv && /^\d+$/.test(deployFloorEnv) ? BigInt(deployFloorEnv) : BigInt(0);
-
-    const legacyAddr = legacyContractAddress();
-    const legacyDeployEnv = process.env.LEGACY_CONFESSIONS_DEPLOY_BLOCK;
-    const legacyDeploy =
-      legacyDeployEnv && /^\d+$/.test(legacyDeployEnv) ? BigInt(legacyDeployEnv) : BigInt(0);
-
-    // All-time scans must have deploy blocks to avoid huge ranges/timeouts.
-    if (timeframe === 'all' && deployFloor === BigInt(0)) {
+    // 1) Confession owner map (needed to attribute votes to confession owners)
+    const { data: ownersData, error: ownersError } = await sb
+      .from('confessions')
+      .select('id,wallet');
+    if (ownersError) {
       return NextResponse.json(
-        { error: 'Missing CONFESSIONS_DEPLOY_BLOCK for all-time rebuild.' },
-        { status: 400 }
+        { error: 'Failed to read confessions owners.', supabase: ownersError.message },
+        { status: 500 }
       );
     }
-    if (timeframe === 'all' && legacyAddr && legacyDeploy === BigInt(0)) {
+    const ownerByConfessionId = new Map<number, string>();
+    for (const row of (ownersData ?? []) as { id: number; wallet: string }[]) {
+      ownerByConfessionId.set(Number(row.id), row.wallet.toLowerCase());
+    }
+
+    const acc = new Map<string, Acc>();
+
+    // 2) Confession posts (+1)
+    let confessionQ = sb.from('confessions').select('wallet,timestamp');
+    if (cutoff) confessionQ = confessionQ.gte('timestamp', cutoff);
+    const { data: confRows, error: confErr } = await confessionQ;
+    if (confErr) {
       return NextResponse.json(
-        { error: 'Missing LEGACY_CONFESSIONS_DEPLOY_BLOCK for all-time rebuild.' },
-        { status: 400 }
+        { error: 'Failed to read confessions.', supabase: confErr.message },
+        { status: 500 }
       );
     }
-
-    // Window start for timeframe (then clamped per contract by its deploy block).
-    let windowFrom = BigInt(0);
-    if (timeframe === 'daily') {
-      windowFrom = latest >= BLOCKS_24H_APPROX ? latest - BLOCKS_24H_APPROX : BigInt(0);
-    } else if (timeframe === 'weekly') {
-      const blocks7d = BLOCKS_24H_APPROX * BigInt(7);
-      windowFrom = latest >= blocks7d ? latest - blocks7d : BigInt(0);
+    for (const row of (confRows ?? []) as { wallet: string; timestamp: string }[]) {
+      const u = touch(acc, row.wallet);
+      u.confessionCount += 1;
+      u.score += 1;
     }
 
-    const newFromBlock = windowFrom < deployFloor ? deployFloor : windowFrom;
-    const legacyFromBlock =
-      legacyAddr ? (windowFrom < legacyDeploy ? legacyDeploy : windowFrom) : null;
-
-    const accAll = new Map<string, Acc>();
-
-    // New contract scan
-    const accNew = await scanContract({
-      client,
-      address: CONTRACT_ADDRESS,
-      fromBlock: newFromBlock,
-      toBlock: latest,
-    });
-    for (const v of accNew.values()) mergeAcc(accAll, v);
-
-    // Legacy contract scan (optional)
-    if (legacyAddr && legacyFromBlock != null) {
-      const accLegacy = await scanContract({
-        client,
-        address: legacyAddr,
-        fromBlock: legacyFromBlock,
-        toBlock: latest,
-      });
-      for (const v of accLegacy.values()) mergeAcc(accAll, v);
+    // 3) Likes (+3) — votes table stores latest vote per (confession, wallet)
+    let votesQ = sb.from('votes').select('confession_id,vote,timestamp').eq('vote', 1);
+    if (cutoff) votesQ = votesQ.gte('timestamp', cutoff);
+    const { data: voteRows, error: voteErr } = await votesQ;
+    if (voteErr) {
+      return NextResponse.json(
+        { error: 'Failed to read votes.', supabase: voteErr.message },
+        { status: 500 }
+      );
+    }
+    for (const row of (voteRows ?? []) as { confession_id: number; vote: number }[]) {
+      const owner = ownerByConfessionId.get(Number(row.confession_id));
+      if (!owner) continue;
+      const u = touch(acc, owner);
+      u.likes += 1;
+      u.score += 3;
     }
 
-    const entries = Array.from(accAll.values())
-      .sort(
-        (a, b) =>
-          b.score - a.score ||
-          b.confessionCount - a.confessionCount ||
-          a.user.localeCompare(b.user)
-      )
+    // 4) Tips (+5 each tip tx, totalTips in wei)
+    let tipsQ = sb.from('tips').select('to_wallet,amount,timestamp');
+    if (cutoff) tipsQ = tipsQ.gte('timestamp', cutoff);
+    const { data: tipRows, error: tipErr } = await tipsQ;
+    if (tipErr) {
+      return NextResponse.json(
+        { error: 'Failed to read tips.', supabase: tipErr.message },
+        { status: 500 }
+      );
+    }
+    for (const row of (tipRows ?? []) as { to_wallet: string; amount: string }[]) {
+      const u = touch(acc, row.to_wallet);
+      u.score += 5;
+      try {
+        u.tipsWei = (BigInt(u.tipsWei) + parseEther(row.amount || '0')).toString();
+      } catch {
+        // If amount is malformed in some old row, just skip wei sum for that row.
+      }
+    }
+
+    const entries = Array.from(acc.values())
+      .sort((a, b) => b.score - a.score || b.confessionCount - a.confessionCount || a.user.localeCompare(b.user))
       .map((e, idx) => ({
         rank: idx + 1,
         user: e.user,
@@ -275,7 +176,6 @@ export async function POST(req: Request) {
         badge: idx + 1 <= 10 ? 'Elite Soul' : idx + 1 <= 100 ? 'Active Soul' : null,
       }));
 
-    const sb = supabaseServer();
     const { error } = await sb
       .from('leaderboard_cache')
       .upsert(
@@ -283,8 +183,8 @@ export async function POST(req: Request) {
           timeframe,
           updated_at: new Date().toISOString(),
           entries,
-          from_block: windowFrom.toString(),
-          to_block: latest.toString(),
+          from_block: cutoff ?? 'all',
+          to_block: 'supabase',
         } as any,
         { onConflict: 'timeframe' }
       );
@@ -307,12 +207,9 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       timeframe,
-      windowFrom: windowFrom.toString(),
-      newFromBlock: newFromBlock.toString(),
-      legacyFromBlock: legacyFromBlock != null ? legacyFromBlock.toString() : null,
-      toBlock: latest.toString(),
+      source: 'supabase',
+      cutoff: cutoff ?? null,
       count: entries.length,
-      legacyIncluded: Boolean(legacyAddr),
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error';
@@ -335,6 +232,7 @@ export async function GET(req: Request) {
       configuredLength: want.length,
       hasServiceRoleKey: Boolean((process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim()),
       hasSupabaseUrl: Boolean((process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()),
+      mode: 'supabase',
     },
     { status: 200 }
   );
