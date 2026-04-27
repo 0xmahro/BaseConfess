@@ -22,8 +22,16 @@ export const LOVE_METER_CONTRACT_ADDRESS =
 /** Contract creation block on Base (optional). Used to count `LoveTested` logs if `totalTests` is missing on-chain. */
 export function getLoveMeterDeployBlock(): bigint | null {
   const raw = process.env.NEXT_PUBLIC_LOVE_METER_DEPLOY_BLOCK;
-  if (!raw || !/^\d+$/.test(raw)) return null;
-  return BigInt(raw);
+  if (raw && /^\d+$/.test(raw)) return BigInt(raw);
+
+  // Default deploy block for built-in Love Meter contract address.
+  if (
+    LOVE_METER_CONTRACT_ADDRESS.toLowerCase() ===
+    '0x8765bd20c3cc2bca9e9e42f40447fc0d09e54fa3'
+  ) {
+    return BigInt(44177702);
+  }
+  return null;
 }
 
 export const LOVE_METER_ABI = [

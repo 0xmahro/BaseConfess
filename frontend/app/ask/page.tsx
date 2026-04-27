@@ -465,9 +465,8 @@ export default function AskTestPage() {
     !totalTestsReadError &&
     !totalTestsStalled;
 
-  const measurementsLoading =
-    chainId === base.id &&
-    (waitingOnTotalTestsRpc || eventCountLoading || inferDeployLoading);
+  // Avoid indefinite "..." when fallback scans are slow/rate-limited.
+  const measurementsLoading = chainId === base.id && waitingOnTotalTestsRpc;
 
   const measurementsValue: number | null =
     typeof totalTestsWei === 'bigint' ? Number(totalTestsWei) : eventBackedCount;
