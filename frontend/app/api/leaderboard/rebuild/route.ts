@@ -208,14 +208,17 @@ export async function POST(req: Request) {
   const legacyDeploy =
     legacyDeployEnv && /^\d+$/.test(legacyDeployEnv) ? BigInt(legacyDeployEnv) : BigInt(0);
 
-  let fromBlock = deployFloor;
+  // Window start for timeframe (then clamped per contract by its deploy block).
+  let windowFrom = BigInt(0);
   if (timeframe === 'daily') {
-    fromBlock = latest >= BLOCKS_24H_APPROX ? latest - BLOCKS_24H_APPROX : BigInt(0);
+    windowFrom = latest >= BLOCKS_24H_APPROX ? latest - BLOCKS_24H_APPROX : BigInt(0);
   } else if (timeframe === 'weekly') {
     const blocks7d = BLOCKS_24H_APPROX * BigInt(7);
-    fromBlock = latest >= blocks7d ? latest - blocks7d : BigInt(0);
+    windowFrom = latest >= blocks7d ? latest - blocks7d : BigInt(0);
   }
-  if (fromBlock < deployFloor) fromBlock = deployFloor;
+  const newFromBlock = windowFrom < deployFloor ? deployFloor : windowFrom;
+  const legacyFromBlock =
+    legacyAddr ? (windowFrom < legacyDeploy ? legacyDeploy : windowFrom) : null;
 
   const accAll = new Map<string, Acc>();
 
@@ -223,15 +226,13 @@ export async function POST(req: Request) {
   const accNew = await scanContract({
     client,
     address: CONTRACT_ADDRESS,
-    fromBlock,
+    fromBlock: newFromBlock,
     toBlock: latest,
   });
   for (const v of accNew.values()) mergeAcc(accAll, v);
 
   // Legacy contract scan (optional)
-  let legacyFromBlock = fromBlock;
-  if (legacyAddr) {
-    if (legacyFromBlock < legacyDeploy) legacyFromBlock = legacyDeploy;
+  if (legacyAddr && legacyFromBlock != null) {
     const accLegacy = await scanContract({
       client,
       address: legacyAddr,
@@ -261,7 +262,7 @@ export async function POST(req: Request) {
         timeframe,
         updated_at: new Date().toISOString(),
         entries,
-        from_block: fromBlock.toString(),
+        from_block: windowFrom.toString(),
         to_block: latest.toString(),
       } as any,
       { onConflict: 'timeframe' }
@@ -285,7 +286,9 @@ export async function POST(req: Request) {
   return NextResponse.json({
     ok: true,
     timeframe,
-    fromBlock: fromBlock.toString(),
+    windowFrom: windowFrom.toString(),
+    newFromBlock: newFromBlock.toString(),
+    legacyFromBlock: legacyFromBlock != null ? legacyFromBlock.toString() : null,
     toBlock: latest.toString(),
     count: entries.length,
     legacyIncluded: Boolean(legacyAddr),
