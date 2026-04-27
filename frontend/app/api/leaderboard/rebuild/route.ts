@@ -9,9 +9,15 @@ type Timeframe = 'daily' | 'weekly' | 'all';
 const LOG_CHUNK_BLOCKS = BigInt(1999);
 const BLOCKS_24H_APPROX = BigInt(45000);
 
-const evPosted = parseAbiItem('event ConfessionPosted(address indexed user)');
-const evLiked = parseAbiItem('event ConfessionLiked(address indexed user)');
-const evTipped = parseAbiItem('event ConfessionTipped(address indexed user, uint256 amount)');
+const evPosted = parseAbiItem(
+  'event ConfessionPosted(uint256 indexed confessionId, address indexed user, bytes32 confessionHash, uint256 timestamp)'
+);
+const evVoted = parseAbiItem(
+  'event ConfessionVoted(uint256 indexed confessionId, address indexed voter, int8 vote)'
+);
+const evTipped = parseAbiItem(
+  'event ConfessionTipped(uint256 indexed confessionId, address indexed from, address indexed to, uint256 amount)'
+);
 
 function parseTimeframe(v: string | null): Timeframe {
   if (v === 'daily' || v === 'weekly' || v === 'all') return v;
@@ -88,37 +94,67 @@ export async function POST(req: Request) {
     a.tipsWei = (cur + amount).toString();
   };
 
+  const confessionOwner = new Map<bigint, string>(); // confessionId -> owner
+  const lastVote = new Map<string, number>(); // `${confessionId}:${voter}` -> -1|1
+
   // Scan logs in chunks
   let from = fromBlock;
   while (from <= latest) {
     const to = from + LOG_CHUNK_BLOCKS > latest ? latest : from + LOG_CHUNK_BLOCKS;
 
-    const [postedLogs, likedLogs, tippedLogs] = await Promise.all([
+    const [postedLogs, votedLogs, tippedLogs] = await Promise.all([
       client.getLogs({ address: CONTRACT_ADDRESS, event: evPosted, fromBlock: from, toBlock: to }),
-      client.getLogs({ address: CONTRACT_ADDRESS, event: evLiked, fromBlock: from, toBlock: to }),
+      client.getLogs({ address: CONTRACT_ADDRESS, event: evVoted, fromBlock: from, toBlock: to }),
       client.getLogs({ address: CONTRACT_ADDRESS, event: evTipped, fromBlock: from, toBlock: to }),
     ]);
 
     // Warm timestamp cache for blocks we touched (only for potential future use / debugging).
     const blocks = new Set<bigint>();
     for (const l of postedLogs) blocks.add(l.blockNumber!);
-    for (const l of likedLogs) blocks.add(l.blockNumber!);
+    for (const l of votedLogs) blocks.add(l.blockNumber!);
     for (const l of tippedLogs) blocks.add(l.blockNumber!);
     await Promise.all(Array.from(blocks).map((bn) => getBlockTs(bn)));
 
     for (const l of postedLogs) {
-      const u = touch((l.args as any).user as string);
+      const args = l.args as any;
+      const confessionId = args.confessionId as bigint;
+      const owner = (args.user as string).toLowerCase();
+      confessionOwner.set(confessionId, owner);
+      const u = touch(owner);
       u.confessionCount += 1;
       u.score += 1;
     }
-    for (const l of likedLogs) {
-      const u = touch((l.args as any).user as string);
-      u.likes += 1;
-      u.score += 3;
+    for (const l of votedLogs) {
+      const args = l.args as any;
+      const confessionId = args.confessionId as bigint;
+      const voter = (args.voter as string).toLowerCase();
+      const vote = Number(args.vote);
+      if (vote !== 1 && vote !== -1) continue;
+
+      const owner = confessionOwner.get(confessionId);
+      if (!owner) continue;
+      if (owner === voter) continue; // ignore self votes for leaderboard
+
+      const k = `${confessionId.toString()}:${voter}`;
+      const prev = lastVote.get(k);
+      lastVote.set(k, vote);
+
+      // We only score likes (+3). Handle flips: +1->-1 removes like, -1->+1 adds like.
+      if (prev === 1 && vote !== 1) {
+        const u = touch(owner);
+        u.likes = Math.max(0, u.likes - 1);
+        u.score = Math.max(0, u.score - 3);
+      } else if (prev !== 1 && vote === 1) {
+        const u = touch(owner);
+        u.likes += 1;
+        u.score += 3;
+      }
     }
     for (const l of tippedLogs) {
-      const u = touch((l.args as any).user as string);
-      const amount = (l.args as any).amount as bigint;
+      const args = l.args as any;
+      const toAddr = (args.to as string).toLowerCase();
+      const amount = args.amount as bigint;
+      const u = touch(toAddr);
       addTips(u, amount);
       u.score += 5;
     }

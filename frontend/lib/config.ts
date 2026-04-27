@@ -262,27 +262,6 @@ export const CONTRACT_ABI = [
     ],
   },
   {
-    name: 'ConfessionLiked',
-    type: 'event',
-    anonymous: false,
-    inputs: [{ name: 'user', type: 'address', indexed: true, internalType: 'address' }],
-  },
-  {
-    name: 'ConfessionPosted',
-    type: 'event',
-    anonymous: false,
-    inputs: [{ name: 'user', type: 'address', indexed: true, internalType: 'address' }],
-  },
-  {
-    name: 'ConfessionTipped',
-    type: 'event',
-    anonymous: false,
-    inputs: [
-      { name: 'user', type: 'address', indexed: true, internalType: 'address' },
-      { name: 'amount', type: 'uint256', indexed: false, internalType: 'uint256' },
-    ],
-  },
-  {
     name: 'confessionCount',
     type: 'function',
     stateMutability: 'view',

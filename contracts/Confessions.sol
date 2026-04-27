@@ -22,10 +22,6 @@ contract Confessions {
     mapping(address => uint256) public totalTips;
     mapping(address => uint256) public score;
 
-    event ConfessionPosted(address indexed user);
-    event ConfessionLiked(address indexed user);
-    event ConfessionTipped(address indexed user, uint256 amount);
-
     event ConfessionPosted(
         uint256 indexed confessionId,
         address indexed user,
@@ -76,7 +72,6 @@ contract Confessions {
         confessionCount[msg.sender] += 1;
         score[msg.sender] += 1;
 
-        emit ConfessionPosted(msg.sender);
         emit ConfessionPosted(
             totalConfessions,
             msg.sender,
@@ -105,7 +100,6 @@ contract Confessions {
                 // add a new like
                 totalLikes[ownerAddr] += 1;
                 score[ownerAddr] += 3;
-                emit ConfessionLiked(ownerAddr);
             }
         }
 
@@ -129,8 +123,6 @@ contract Confessions {
         // Leaderboard: tips received by confession owner.
         totalTips[confessionOwnerAddr] += msg.value;
         score[confessionOwnerAddr] += 5;
-        emit ConfessionTipped(confessionOwnerAddr, msg.value);
-
         emit ConfessionTipped(
             confessionId,
             msg.sender,
