@@ -190,109 +190,134 @@ export async function POST(req: Request) {
     );
   }
 
-  const url = new URL(req.url);
-  const timeframe = parseTimeframe(url.searchParams.get('timeframe'));
+  try {
+    const url = new URL(req.url);
+    const timeframe = parseTimeframe(url.searchParams.get('timeframe'));
 
-  const client = createPublicClient({
-    chain: base,
-    transport: http(rpcUrl()),
-  });
+    const client = createPublicClient({
+      chain: base,
+      transport: http(rpcUrl()),
+    });
 
-  const latest = await client.getBlockNumber();
-  const deployFloorEnv = process.env.CONFESSIONS_DEPLOY_BLOCK;
-  const deployFloor =
-    deployFloorEnv && /^\d+$/.test(deployFloorEnv) ? BigInt(deployFloorEnv) : BigInt(0);
+    const latest = await client.getBlockNumber();
+    const deployFloorEnv = process.env.CONFESSIONS_DEPLOY_BLOCK;
+    const deployFloor =
+      deployFloorEnv && /^\d+$/.test(deployFloorEnv) ? BigInt(deployFloorEnv) : BigInt(0);
 
-  const legacyAddr = legacyContractAddress();
-  const legacyDeployEnv = process.env.LEGACY_CONFESSIONS_DEPLOY_BLOCK;
-  const legacyDeploy =
-    legacyDeployEnv && /^\d+$/.test(legacyDeployEnv) ? BigInt(legacyDeployEnv) : BigInt(0);
+    const legacyAddr = legacyContractAddress();
+    const legacyDeployEnv = process.env.LEGACY_CONFESSIONS_DEPLOY_BLOCK;
+    const legacyDeploy =
+      legacyDeployEnv && /^\d+$/.test(legacyDeployEnv) ? BigInt(legacyDeployEnv) : BigInt(0);
 
-  // Window start for timeframe (then clamped per contract by its deploy block).
-  let windowFrom = BigInt(0);
-  if (timeframe === 'daily') {
-    windowFrom = latest >= BLOCKS_24H_APPROX ? latest - BLOCKS_24H_APPROX : BigInt(0);
-  } else if (timeframe === 'weekly') {
-    const blocks7d = BLOCKS_24H_APPROX * BigInt(7);
-    windowFrom = latest >= blocks7d ? latest - blocks7d : BigInt(0);
-  }
-  const newFromBlock = windowFrom < deployFloor ? deployFloor : windowFrom;
-  const legacyFromBlock =
-    legacyAddr ? (windowFrom < legacyDeploy ? legacyDeploy : windowFrom) : null;
+    // All-time scans must have deploy blocks to avoid huge ranges/timeouts.
+    if (timeframe === 'all' && deployFloor === BigInt(0)) {
+      return NextResponse.json(
+        { error: 'Missing CONFESSIONS_DEPLOY_BLOCK for all-time rebuild.' },
+        { status: 400 }
+      );
+    }
+    if (timeframe === 'all' && legacyAddr && legacyDeploy === BigInt(0)) {
+      return NextResponse.json(
+        { error: 'Missing LEGACY_CONFESSIONS_DEPLOY_BLOCK for all-time rebuild.' },
+        { status: 400 }
+      );
+    }
 
-  const accAll = new Map<string, Acc>();
+    // Window start for timeframe (then clamped per contract by its deploy block).
+    let windowFrom = BigInt(0);
+    if (timeframe === 'daily') {
+      windowFrom = latest >= BLOCKS_24H_APPROX ? latest - BLOCKS_24H_APPROX : BigInt(0);
+    } else if (timeframe === 'weekly') {
+      const blocks7d = BLOCKS_24H_APPROX * BigInt(7);
+      windowFrom = latest >= blocks7d ? latest - blocks7d : BigInt(0);
+    }
 
-  // New contract scan
-  const accNew = await scanContract({
-    client,
-    address: CONTRACT_ADDRESS,
-    fromBlock: newFromBlock,
-    toBlock: latest,
-  });
-  for (const v of accNew.values()) mergeAcc(accAll, v);
+    const newFromBlock = windowFrom < deployFloor ? deployFloor : windowFrom;
+    const legacyFromBlock =
+      legacyAddr ? (windowFrom < legacyDeploy ? legacyDeploy : windowFrom) : null;
 
-  // Legacy contract scan (optional)
-  if (legacyAddr && legacyFromBlock != null) {
-    const accLegacy = await scanContract({
+    const accAll = new Map<string, Acc>();
+
+    // New contract scan
+    const accNew = await scanContract({
       client,
-      address: legacyAddr,
-      fromBlock: legacyFromBlock,
+      address: CONTRACT_ADDRESS,
+      fromBlock: newFromBlock,
       toBlock: latest,
     });
-    for (const v of accLegacy.values()) mergeAcc(accAll, v);
-  }
+    for (const v of accNew.values()) mergeAcc(accAll, v);
 
-  const entries = Array.from(accAll.values())
-    .sort((a, b) => (b.score - a.score) || (b.confessionCount - a.confessionCount) || a.user.localeCompare(b.user))
-    .map((e, idx) => ({
-      rank: idx + 1,
-      user: e.user,
-      score: e.score,
-      confessionCount: e.confessionCount,
-      likes: e.likes,
-      tipsWei: e.tipsWei,
-      badge: idx + 1 <= 10 ? 'Elite Soul' : idx + 1 <= 100 ? 'Active Soul' : null,
-    }));
+    // Legacy contract scan (optional)
+    if (legacyAddr && legacyFromBlock != null) {
+      const accLegacy = await scanContract({
+        client,
+        address: legacyAddr,
+        fromBlock: legacyFromBlock,
+        toBlock: latest,
+      });
+      for (const v of accLegacy.values()) mergeAcc(accAll, v);
+    }
 
-  const sb = supabaseServer();
-  const { error } = await sb
-    .from('leaderboard_cache')
-    .upsert(
-      {
-        timeframe,
-        updated_at: new Date().toISOString(),
-        entries,
-        from_block: windowFrom.toString(),
-        to_block: latest.toString(),
-      } as any,
-      { onConflict: 'timeframe' }
-    );
+    const entries = Array.from(accAll.values())
+      .sort(
+        (a, b) =>
+          b.score - a.score ||
+          b.confessionCount - a.confessionCount ||
+          a.user.localeCompare(b.user)
+      )
+      .map((e, idx) => ({
+        rank: idx + 1,
+        user: e.user,
+        score: e.score,
+        confessionCount: e.confessionCount,
+        likes: e.likes,
+        tipsWei: e.tipsWei,
+        badge: idx + 1 <= 10 ? 'Elite Soul' : idx + 1 <= 100 ? 'Active Soul' : null,
+      }));
 
-  if (error) {
-    return NextResponse.json(
-      {
-        error: 'Failed to write cache.',
-        supabase: {
-          message: error.message,
-          details: (error as any).details ?? null,
-          hint: (error as any).hint ?? null,
-          code: (error as any).code ?? null,
+    const sb = supabaseServer();
+    const { error } = await sb
+      .from('leaderboard_cache')
+      .upsert(
+        {
+          timeframe,
+          updated_at: new Date().toISOString(),
+          entries,
+          from_block: windowFrom.toString(),
+          to_block: latest.toString(),
+        } as any,
+        { onConflict: 'timeframe' }
+      );
+
+    if (error) {
+      return NextResponse.json(
+        {
+          error: 'Failed to write cache.',
+          supabase: {
+            message: error.message,
+            details: (error as any).details ?? null,
+            hint: (error as any).hint ?? null,
+            code: (error as any).code ?? null,
+          },
         },
-      },
-      { status: 500 }
-    );
-  }
+        { status: 500 }
+      );
+    }
 
-  return NextResponse.json({
-    ok: true,
-    timeframe,
-    windowFrom: windowFrom.toString(),
-    newFromBlock: newFromBlock.toString(),
-    legacyFromBlock: legacyFromBlock != null ? legacyFromBlock.toString() : null,
-    toBlock: latest.toString(),
-    count: entries.length,
-    legacyIncluded: Boolean(legacyAddr),
-  });
+    return NextResponse.json({
+      ok: true,
+      timeframe,
+      windowFrom: windowFrom.toString(),
+      newFromBlock: newFromBlock.toString(),
+      legacyFromBlock: legacyFromBlock != null ? legacyFromBlock.toString() : null,
+      toBlock: latest.toString(),
+      count: entries.length,
+      legacyIncluded: Boolean(legacyAddr),
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return NextResponse.json({ error: 'Rebuild failed.', message: msg }, { status: 500 });
+  }
 }
 
 export async function GET(req: Request) {
