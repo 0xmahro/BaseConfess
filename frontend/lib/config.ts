@@ -8,7 +8,7 @@
 // ============================================================
 
 export const CONTRACT_ADDRESS =
-  '0xD11cB9c3F69650293370Ea38eb688010E0DDCe8d' as `0x${string}`;
+  '0xeaa890e6c93264B498773425b6f8f02726c143F4' as `0x${string}`;
 
 export const CONFESSION_FEE = '0.000025'; // ETH — must match confessionFee in contract
 
