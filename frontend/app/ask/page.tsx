@@ -138,6 +138,22 @@ function formatFeeDisplay(wei: bigint): string {
   return trimmed ? `${whole}.${trimmed}` : whole;
 }
 
+type RecentLoveTest = {
+  tx_hash: string;
+  name_a: string | null;
+  name_b: string | null;
+  percent: number;
+  created_at: string;
+};
+
+function timeAgoShort(timestamp: string): string {
+  const sec = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
+  if (sec < 60) return `${sec}s`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}m`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h`;
+  return `${Math.floor(sec / 86400)}d`;
+}
+
 function LoveMeterStatsStrip({
   total,
   totalLoading,
@@ -262,6 +278,7 @@ export default function AskTestPage() {
   const [last24hCount, setLast24hCount] = useState<number | null>(null);
   const [last24hLoading, setLast24hLoading] = useState(false);
   const [serverStatsLoading, setServerStatsLoading] = useState(false);
+  const [recentTests, setRecentTests] = useState<RecentLoveTest[]>([]);
   const [statsTick, setStatsTick] = useState(0);
   /** `undefined` = not resolved yet; `false` = lookup failed; `bigint` = first block with code */
   const [inferredDeployBlock, setInferredDeployBlock] = useState<
@@ -473,6 +490,22 @@ export default function AskTestPage() {
     };
   }, [chainId, statsTick]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('love_meter_tests')
+        .select('tx_hash,name_a,name_b,percent,created_at')
+        .order('created_at', { ascending: false })
+        .limit(8);
+      if (cancelled) return;
+      setRecentTests((data as RecentLoveTest[]) ?? []);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [statsTick]);
+
   const { writeContractAsync, isPending: isWriting } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash: txHash,
@@ -516,15 +549,29 @@ export default function AskTestPage() {
 
         // Persist usage stats in Supabase so totals are fast/reliable.
         if (address) {
-          await supabase.from('love_meter_tests').upsert(
+          const { error: writeErr } = await supabase.from('love_meter_tests').upsert(
             {
               tx_hash: txHash.toLowerCase(),
               wallet: address.toLowerCase(),
+              name_a: name1.trim(),
+              name_b: name2.trim(),
               percent: found,
               created_at: new Date().toISOString(),
             },
             { onConflict: 'tx_hash' }
           );
+          if (writeErr) {
+            // Backward-compat for DBs where name_a/name_b columns are not added yet.
+            await supabase.from('love_meter_tests').upsert(
+              {
+                tx_hash: txHash.toLowerCase(),
+                wallet: address.toLowerCase(),
+                percent: found,
+                created_at: new Date().toISOString(),
+              },
+              { onConflict: 'tx_hash' }
+            );
+          }
         }
 
         if (hasOnChainCounterRef.current) void refetchTotalTests();
@@ -738,9 +785,44 @@ export default function AskTestPage() {
 
               <div className="flex items-center justify-center gap-2 text-[11px] font-extrabold text-indigo-700/55">
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-300" />
-                <span>No storage · Names stay on your device</span>
+                <span>Recent tests are visible in the public feed</span>
               </div>
             </div>
+
+            {recentTests.length > 0 && (
+              <div className="bg-white/80 backdrop-blur-sm rounded-[1.6rem] border border-white/70 p-4 sm:p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-extrabold uppercase tracking-widest text-indigo-700/70">
+                    Recent love tests
+                  </p>
+                  <span className="text-[10px] font-bold text-indigo-400">public</span>
+                </div>
+                <div className="space-y-2">
+                  {recentTests.map((row) => (
+                    <div
+                      key={row.tx_hash}
+                      className="flex items-center justify-between rounded-2xl border border-violet-100 bg-white px-3 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-extrabold text-ink truncate">
+                          {(row.name_a || 'You')} <span className="text-violet-400">&</span>{' '}
+                          {(row.name_b || 'Partner')}
+                        </p>
+                        <p className="text-[10px] font-bold text-indigo-400">
+                          {timeAgoShort(row.created_at)} ago
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-[10px] font-extrabold text-fuchsia-500 uppercase tracking-widest">
+                          Score
+                        </p>
+                        <p className="text-base font-black text-violet-700">%{row.percent}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

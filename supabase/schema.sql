@@ -74,9 +74,14 @@ CREATE TABLE IF NOT EXISTS love_meter_tests (
   id              BIGSERIAL PRIMARY KEY,
   tx_hash         TEXT NOT NULL UNIQUE,
   wallet          TEXT NOT NULL,
+  name_a          TEXT,
+  name_b          TEXT,
   percent         SMALLINT NOT NULL CHECK (percent >= 0 AND percent <= 100),
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE love_meter_tests ADD COLUMN IF NOT EXISTS name_a TEXT;
+ALTER TABLE love_meter_tests ADD COLUMN IF NOT EXISTS name_b TEXT;
 
 CREATE INDEX IF NOT EXISTS love_meter_tests_created_at_idx ON love_meter_tests (created_at DESC);
 CREATE INDEX IF NOT EXISTS love_meter_tests_wallet_idx ON love_meter_tests (wallet);
