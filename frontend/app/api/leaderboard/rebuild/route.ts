@@ -57,7 +57,29 @@ export async function POST(req: Request) {
   try {
     requireSecret(req);
   } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const hdr =
+      req.headers.get('x-leaderboard-secret') ??
+      req.headers.get('x-leaderboard-token') ??
+      '';
+    const auth = req.headers.get('authorization') ?? '';
+    const bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7) : '';
+    const url = new URL(req.url);
+    const qp = url.searchParams.get('secret') ?? '';
+
+    const got = (hdr || bearer || qp).trim();
+    const want = (process.env.LEADERBOARD_REBUILD_SECRET ?? '').trim();
+
+    return NextResponse.json(
+      {
+        error: 'Unauthorized',
+        debug: {
+          secretConfigured: Boolean(want),
+          configuredLength: want.length,
+          providedLength: got.length,
+        },
+      },
+      { status: 401 }
+    );
   }
 
   const url = new URL(req.url);
@@ -221,5 +243,25 @@ export async function POST(req: Request) {
     toBlock: latest.toString(),
     count: entries.length,
   });
+}
+
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const debug = url.searchParams.get('debug') === '1';
+  const want = (process.env.LEADERBOARD_REBUILD_SECRET ?? '').trim();
+  const configured = Boolean(want);
+  if (!debug) {
+    return NextResponse.json({ ok: true, configured }, { status: 200 });
+  }
+  return NextResponse.json(
+    {
+      ok: true,
+      configured,
+      configuredLength: want.length,
+      hasServiceRoleKey: Boolean((process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim()),
+      hasSupabaseUrl: Boolean((process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()),
+    },
+    { status: 200 }
+  );
 }
 
