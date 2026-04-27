@@ -15,7 +15,13 @@ const loveTestedEvent = parseAbiItem(
 );
 
 function rpcUrl() {
-  return process.env.BASE_RPC_URL ?? 'https://mainnet.base.org';
+  // Keep Love Meter stats independent from leaderboard RPC overrides.
+  // Some providers used for leaderboard rebuild have very small eth_getLogs range limits.
+  return (
+    process.env.LOVE_METER_RPC_URL ??
+    process.env.NEXT_PUBLIC_LOVE_METER_RPC_URL ??
+    'https://mainnet.base.org'
+  );
 }
 
 function delay(ms: number) {
