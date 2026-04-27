@@ -91,6 +91,18 @@ export default function Home() {
             <span className="text-base leading-none">💗</span>
             Love Meter
           </button>
+          <Link
+            href="/top"
+            role="tab"
+            className={`
+              flex-1 flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl text-sm font-extrabold
+              transition-all duration-200 active:scale-[0.98]
+              text-mauve hover:text-pink-500 hover:bg-pink-50/80
+            `}
+          >
+            <span className="text-base leading-none">🏆</span>
+            Top Souls
+          </Link>
         </div>
 
         {tab === 'confess' && (

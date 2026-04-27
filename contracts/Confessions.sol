@@ -3,7 +3,8 @@ pragma solidity ^0.8.20;
 
 contract Confessions {
 
-    uint256 public confessionCount;
+    /// @notice Total number of confessions posted (also the next confession id).
+    uint256 public totalConfessions;
 
     uint256 public confessionFee = 0.000025 ether;
 
@@ -12,6 +13,18 @@ contract Confessions {
     mapping(uint256 => address) public confessionOwner;
 
     mapping(uint256 => mapping(address => int8)) public votes;
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // "Top Souls" leaderboard stats (per confession owner)
+    // ─────────────────────────────────────────────────────────────────────────────
+    mapping(address => uint256) public confessionCount;
+    mapping(address => uint256) public totalLikes;
+    mapping(address => uint256) public totalTips;
+    mapping(address => uint256) public score;
+
+    event ConfessionPosted(address indexed user);
+    event ConfessionLiked(address indexed user);
+    event ConfessionTipped(address indexed user, uint256 amount);
 
     event ConfessionPosted(
         uint256 indexed confessionId,
@@ -52,15 +65,20 @@ contract Confessions {
     function postConfession(bytes32 confessionHash) external payable {
         require(msg.value == confessionFee, "Incorrect fee");
 
-        confessionCount++;
+        totalConfessions++;
 
-        confessionOwner[confessionCount] = msg.sender;
+        confessionOwner[totalConfessions] = msg.sender;
 
         (bool feeSuccess, ) = payable(owner).call{value: msg.value}("");
         require(feeSuccess, "Fee transfer failed");
 
+        // Leaderboard: +1 confession, +1 score.
+        confessionCount[msg.sender] += 1;
+        score[msg.sender] += 1;
+
+        emit ConfessionPosted(msg.sender);
         emit ConfessionPosted(
-            confessionCount,
+            totalConfessions,
             msg.sender,
             confessionHash,
             block.timestamp
@@ -72,7 +90,24 @@ contract Confessions {
 
         require(confessionOwner[confessionId] != address(0), "Confession not found");
 
+        int8 prev = votes[confessionId][msg.sender];
         votes[confessionId][msg.sender] = voteType;
+
+        // Leaderboard: track likes received by confession owner.
+        // Only count +3 score on "like" (voteType == 1). Handle vote flips to prevent farming.
+        address ownerAddr = confessionOwner[confessionId];
+        if (ownerAddr != address(0) && ownerAddr != msg.sender) {
+            if (prev == 1 && voteType != 1) {
+                // remove a previously counted like
+                if (totalLikes[ownerAddr] > 0) totalLikes[ownerAddr] -= 1;
+                if (score[ownerAddr] >= 3) score[ownerAddr] -= 3;
+            } else if (prev != 1 && voteType == 1) {
+                // add a new like
+                totalLikes[ownerAddr] += 1;
+                score[ownerAddr] += 3;
+                emit ConfessionLiked(ownerAddr);
+            }
+        }
 
         emit ConfessionVoted(
             confessionId,
@@ -91,11 +126,24 @@ contract Confessions {
         (bool tipSuccess, ) = payable(confessionOwnerAddr).call{value: msg.value}("");
         require(tipSuccess, "Tip transfer failed");
 
+        // Leaderboard: tips received by confession owner.
+        totalTips[confessionOwnerAddr] += msg.value;
+        score[confessionOwnerAddr] += 5;
+        emit ConfessionTipped(confessionOwnerAddr, msg.value);
+
         emit ConfessionTipped(
             confessionId,
             msg.sender,
             confessionOwnerAddr,
             msg.value
         );
+    }
+
+    function getUserStats(address user)
+        external
+        view
+        returns (uint256 _confessionCount, uint256 _totalLikes, uint256 _totalTips, uint256 _score)
+    {
+        return (confessionCount[user], totalLikes[user], totalTips[user], score[user]);
     }
 }

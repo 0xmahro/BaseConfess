@@ -9,6 +9,7 @@ import { CONTRACT_ADDRESS, CONTRACT_ABI, CONFESSION_FEE } from '@/lib/config';
 import { supabase } from '@/lib/supabase';
 
 const MAX_CHARS = 1000;
+const MIN_CONFESSION_CHARS = 5;
 
 export function PostConfession() {
   const { address, isConnected } = useAccount();
@@ -26,12 +27,18 @@ export function PostConfession() {
   const { isSuccess: txConfirmed, data: receipt } = useWaitForTransactionReceipt({ hash: txHash });
 
   const handleSubmit = async () => {
-    if (!text.trim() || !isConnected || !address || wrongChain) return;
+    const trimmed = text.trim();
+    if (!trimmed || !isConnected || !address || wrongChain) return;
+    if (trimmed.length < MIN_CONFESSION_CHARS) {
+      setErrorMsg(`Confession is too short (min ${MIN_CONFESSION_CHARS} characters).`);
+      setStatus('error');
+      return;
+    }
     setStatus('pending');
     setErrorMsg('');
 
     try {
-      const confessionHash = keccak256(toBytes(text.trim())) as `0x${string}`;
+      const confessionHash = keccak256(toBytes(trimmed)) as `0x${string}`;
       const hash = await writeContractAsync({
         address:      CONTRACT_ADDRESS,
         abi:          CONTRACT_ABI,
@@ -40,7 +47,7 @@ export function PostConfession() {
         value:        parseEther(CONFESSION_FEE),
         ...builderCodeTxOpts(),
       });
-      submittedTextRef.current = text.trim();
+      submittedTextRef.current = trimmed;
       setTxHash(hash);
       setStatus('confirming');
     } catch (err: unknown) {
@@ -85,7 +92,12 @@ export function PostConfession() {
   const charsLeft    = MAX_CHARS - text.length;
   const isOverLimit  = charsLeft < 0;
   const isProcessing = status === 'pending' || status === 'confirming';
-  const canSubmit    = isConnected && !wrongChain && text.trim().length > 0 && !isOverLimit && status === 'idle';
+  const canSubmit    =
+    isConnected &&
+    !wrongChain &&
+    text.trim().length >= MIN_CONFESSION_CHARS &&
+    !isOverLimit &&
+    status === 'idle';
 
   const hashPreview = text.trim()
     ? keccak256(toBytes(text.trim())).slice(0, 18) + '...'
