@@ -7,6 +7,7 @@ import { supabaseServer } from '@/lib/supabaseServer';
 const LOG_CHUNK_BLOCKS = BigInt(1999);
 const LOG_MIN_CHUNK_BLOCKS = BigInt(80);
 const LOG_RETRY_MAX = 2;
+const CHUNK_PAUSE_MS = 120;
 
 const loveTestedEvent = parseAbiItem(
   'event LoveTested(address indexed user, bytes32 indexed name1Hash, bytes32 indexed name2Hash, uint8 percent, uint256 paid)'
@@ -87,9 +88,17 @@ export async function POST(req: Request) {
     const url = new URL(req.url);
     const maxBlocksRaw = url.searchParams.get('maxBlocks');
     const maxBlocks = maxBlocksRaw && /^\d+$/.test(maxBlocksRaw) ? BigInt(maxBlocksRaw) : null;
-    const backfillTo = maxBlocks ? (deploy + maxBlocks < latest ? deploy + maxBlocks : latest) : latest;
+    const startRaw = url.searchParams.get('startBlock');
+    const requestedStart =
+      startRaw && /^\d+$/.test(startRaw) ? BigInt(startRaw) : deploy;
+    const startFrom = requestedStart < deploy ? deploy : requestedStart;
+    const backfillTo = maxBlocks
+      ? startFrom + maxBlocks < latest
+        ? startFrom + maxBlocks
+        : latest
+      : latest;
 
-    let from = deploy;
+    let from = startFrom;
     let inserted = 0;
     const blockTs = new Map<bigint, number>();
 
@@ -124,14 +133,17 @@ export async function POST(req: Request) {
       }
 
       from = to + BigInt(1);
+      await delay(CHUNK_PAUSE_MS);
     }
 
     return NextResponse.json({
       ok: true,
       inserted,
-      fromBlock: deploy.toString(),
+      deployBlock: deploy.toString(),
+      fromBlock: startFrom.toString(),
       toBlock: backfillTo.toString(),
       latest: latest.toString(),
+      nextStartBlock: backfillTo < latest ? (backfillTo + BigInt(1)).toString() : null,
       rpc: rpcUrl(),
     });
   } catch (e: unknown) {
