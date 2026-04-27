@@ -29,9 +29,20 @@ function rpcUrl() {
 }
 
 function requireSecret(req: Request) {
-  const got = req.headers.get('x-leaderboard-secret') ?? '';
-  const want = process.env.LEADERBOARD_REBUILD_SECRET ?? '';
-  if (!want || got !== want) throw new Error('Unauthorized');
+  const hdr =
+    req.headers.get('x-leaderboard-secret') ??
+    req.headers.get('x-leaderboard-token') ??
+    '';
+
+  const auth = req.headers.get('authorization') ?? '';
+  const bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7) : '';
+
+  const url = new URL(req.url);
+  const qp = url.searchParams.get('secret') ?? '';
+
+  const got = (hdr || bearer || qp).trim();
+  const want = (process.env.LEADERBOARD_REBUILD_SECRET ?? '').trim();
+  if (!want || !got || got !== want) throw new Error('Unauthorized');
 }
 
 type Acc = {
