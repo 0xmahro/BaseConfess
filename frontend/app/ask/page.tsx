@@ -20,6 +20,7 @@ import {
 } from 'viem';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { builderCodeTxOpts } from '@/lib/builderCode';
+import { supabase } from '@/lib/supabase';
 import {
   LOVE_METER_ABI,
   LOVE_METER_CONTRACT_ADDRESS,
@@ -512,6 +513,20 @@ export default function AskTestPage() {
         if (found == null || Number.isNaN(found)) throw new Error('No LoveTested event found');
         setPercent(found);
         setStep('result');
+
+        // Persist usage stats in Supabase so totals are fast/reliable.
+        if (address) {
+          await supabase.from('love_meter_tests').upsert(
+            {
+              tx_hash: txHash.toLowerCase(),
+              wallet: address.toLowerCase(),
+              percent: found,
+              created_at: new Date().toISOString(),
+            },
+            { onConflict: 'tx_hash' }
+          );
+        }
+
         if (hasOnChainCounterRef.current) void refetchTotalTests();
         else setEventBackedCount((c) => (c == null ? 1 : c + 1));
         setStatsTick((t) => t + 1);

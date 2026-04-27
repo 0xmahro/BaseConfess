@@ -68,3 +68,20 @@ CREATE POLICY "tips_insert_all"  ON tips FOR INSERT WITH CHECK (true);
 -- Enable realtime for the confessions table so the feed auto-updates
 ALTER PUBLICATION supabase_realtime ADD TABLE confessions;
 ALTER PUBLICATION supabase_realtime ADD TABLE votes;
+
+-- ── love_meter_tests ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS love_meter_tests (
+  id              BIGSERIAL PRIMARY KEY,
+  tx_hash         TEXT NOT NULL UNIQUE,
+  wallet          TEXT NOT NULL,
+  percent         SMALLINT NOT NULL CHECK (percent >= 0 AND percent <= 100),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS love_meter_tests_created_at_idx ON love_meter_tests (created_at DESC);
+CREATE INDEX IF NOT EXISTS love_meter_tests_wallet_idx ON love_meter_tests (wallet);
+
+ALTER TABLE love_meter_tests ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "love_meter_tests_read_all" ON love_meter_tests FOR SELECT USING (true);
+CREATE POLICY "love_meter_tests_insert_all" ON love_meter_tests FOR INSERT WITH CHECK (true);
+CREATE POLICY "love_meter_tests_upsert_all" ON love_meter_tests FOR ALL USING (true);
