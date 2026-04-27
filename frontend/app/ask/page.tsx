@@ -260,6 +260,7 @@ export default function AskTestPage() {
   const [eventCountLoading, setEventCountLoading] = useState(false);
   const [last24hCount, setLast24hCount] = useState<number | null>(null);
   const [last24hLoading, setLast24hLoading] = useState(false);
+  const [serverStatsLoading, setServerStatsLoading] = useState(false);
   const [statsTick, setStatsTick] = useState(0);
   /** `undefined` = not resolved yet; `false` = lookup failed; `bigint` = first block with code */
   const [inferredDeployBlock, setInferredDeployBlock] = useState<
@@ -445,6 +446,32 @@ export default function AskTestPage() {
     };
   }, [chainId, publicClient, effectiveDeployBlock, statsTick]);
 
+  useEffect(() => {
+    if (chainId !== base.id) return;
+    let cancelled = false;
+    setServerStatsLoading(true);
+
+    (async () => {
+      try {
+        const res = await fetch('/api/love-meter-stats', { cache: 'no-store' });
+        const json = await res.json();
+        if (!res.ok || !json?.ok) throw new Error('stats api failed');
+        if (!cancelled) {
+          setEventBackedCount(Number(json.total ?? 0));
+          setLast24hCount(Number(json.last24h ?? 0));
+        }
+      } catch {
+        // keep client-side counters as fallback
+      } finally {
+        if (!cancelled) setServerStatsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [chainId, statsTick]);
+
   const { writeContractAsync, isPending: isWriting } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash: txHash,
@@ -508,7 +535,7 @@ export default function AskTestPage() {
   const hasTotalValue = typeof totalTestsWei === 'bigint' || eventBackedCount !== null;
   const measurementsLoading =
     chainId === base.id &&
-    (!hasTotalValue && (waitingOnTotalTestsRpc || eventCountLoading || inferDeployLoading));
+    (!hasTotalValue && (waitingOnTotalTestsRpc || eventCountLoading || inferDeployLoading || serverStatsLoading));
 
   const measurementsValue: number | null =
     typeof totalTestsWei === 'bigint' ? Number(totalTestsWei) : eventBackedCount;
