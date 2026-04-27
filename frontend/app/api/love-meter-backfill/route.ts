@@ -5,6 +5,8 @@ import { LOVE_METER_CONTRACT_ADDRESS, getLoveMeterDeployBlock } from '@/lib/conf
 import { supabaseServer } from '@/lib/supabaseServer';
 
 const LOG_CHUNK_BLOCKS = BigInt(1999);
+const LOG_MIN_CHUNK_BLOCKS = BigInt(80);
+const LOG_RETRY_MAX = 2;
 
 const loveTestedEvent = parseAbiItem(
   'event LoveTested(address indexed user, bytes32 indexed name1Hash, bytes32 indexed name2Hash, uint8 percent, uint256 paid)'
@@ -14,9 +16,49 @@ function rpcUrl() {
   return (
     process.env.LOVE_METER_RPC_URL ??
     process.env.NEXT_PUBLIC_LOVE_METER_RPC_URL ??
-    process.env.BASE_RPC_URL ??
     'https://mainnet.base.org'
   );
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getLogsResilient(client: any, fromBlock: bigint, toBlock: bigint) {
+  const out: any[] = [];
+  const queue: { from: bigint; to: bigint; attempt: number }[] = [
+    { from: fromBlock, to: toBlock, attempt: 0 },
+  ];
+
+  while (queue.length > 0) {
+    const cur = queue.pop()!;
+    if (cur.from > cur.to) continue;
+
+    try {
+      const logs = await client.getLogs({
+        address: LOVE_METER_CONTRACT_ADDRESS,
+        event: loveTestedEvent,
+        fromBlock: cur.from,
+        toBlock: cur.to,
+      });
+      out.push(...logs);
+    } catch (e) {
+      const span = cur.to - cur.from;
+      if (span > LOG_MIN_CHUNK_BLOCKS) {
+        const mid = cur.from + span / BigInt(2);
+        queue.push({ from: mid + BigInt(1), to: cur.to, attempt: 0 });
+        queue.push({ from: cur.from, to: mid, attempt: 0 });
+        continue;
+      }
+      if (cur.attempt < LOG_RETRY_MAX) {
+        await delay(250 * (cur.attempt + 1));
+        queue.push({ ...cur, attempt: cur.attempt + 1 });
+        continue;
+      }
+      throw e;
+    }
+  }
+  return out;
 }
 
 function requireSecret(req: Request) {
@@ -42,18 +84,18 @@ export async function POST(req: Request) {
     const latest = await client.getBlockNumber();
     const deploy = getLoveMeterDeployBlock() ?? BigInt(0);
 
+    const url = new URL(req.url);
+    const maxBlocksRaw = url.searchParams.get('maxBlocks');
+    const maxBlocks = maxBlocksRaw && /^\d+$/.test(maxBlocksRaw) ? BigInt(maxBlocksRaw) : null;
+    const backfillTo = maxBlocks ? (deploy + maxBlocks < latest ? deploy + maxBlocks : latest) : latest;
+
     let from = deploy;
     let inserted = 0;
     const blockTs = new Map<bigint, number>();
 
-    while (from <= latest) {
-      const to = from + LOG_CHUNK_BLOCKS > latest ? latest : from + LOG_CHUNK_BLOCKS;
-      const logs = await client.getLogs({
-        address: LOVE_METER_CONTRACT_ADDRESS,
-        event: loveTestedEvent,
-        fromBlock: from,
-        toBlock: to,
-      });
+    while (from <= backfillTo) {
+      const to = from + LOG_CHUNK_BLOCKS > backfillTo ? backfillTo : from + LOG_CHUNK_BLOCKS;
+      const logs = await getLogsResilient(client, from, to);
 
       for (const log of logs) {
         const txHash = log.transactionHash?.toLowerCase();
@@ -88,7 +130,9 @@ export async function POST(req: Request) {
       ok: true,
       inserted,
       fromBlock: deploy.toString(),
-      toBlock: latest.toString(),
+      toBlock: backfillTo.toString(),
+      latest: latest.toString(),
+      rpc: rpcUrl(),
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error';
