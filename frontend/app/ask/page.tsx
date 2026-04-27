@@ -322,8 +322,6 @@ export default function AskTestPage() {
   useEffect(() => {
     if (chainId !== base.id || !publicClient) return;
     if (typeof totalTestsWei === 'bigint') return;
-    if ((totalTestsPending || totalTestsFetching) && !totalTestsStalled) return;
-    if (!totalTestsReadError && !totalTestsStalled) return;
     if (loveMeterDeployBlock != null) return;
     if (inferredDeployBlock !== undefined) return;
 
@@ -364,8 +362,6 @@ export default function AskTestPage() {
   useEffect(() => {
     if (chainId !== base.id || !publicClient) return;
     if (typeof totalTestsWei === 'bigint') return;
-    if ((totalTestsPending || totalTestsFetching) && !totalTestsStalled) return;
-    if (!totalTestsReadError && !totalTestsStalled) return;
 
     if (effectiveDeployBlock == null) {
       if (inferDeployLoading || inferredDeployBlock === undefined) {
@@ -512,7 +508,7 @@ export default function AskTestPage() {
   const hasTotalValue = typeof totalTestsWei === 'bigint' || eventBackedCount !== null;
   const measurementsLoading =
     chainId === base.id &&
-    (waitingOnTotalTestsRpc || (!hasTotalValue && (eventCountLoading || inferDeployLoading)));
+    (!hasTotalValue && (waitingOnTotalTestsRpc || eventCountLoading || inferDeployLoading));
 
   const measurementsValue: number | null =
     typeof totalTestsWei === 'bigint' ? Number(totalTestsWei) : eventBackedCount;
