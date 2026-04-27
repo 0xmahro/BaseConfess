@@ -28,6 +28,14 @@ function rpcUrl() {
   return process.env.BASE_RPC_URL ?? 'https://mainnet.base.org';
 }
 
+function legacyContractAddress(): `0x${string}` | null {
+  const raw = (process.env.LEGACY_CONFESSIONS_ADDRESS ?? '').trim();
+  if (!raw) return null;
+  // Minimal validation: 0x + 40 hex chars
+  if (!/^0x[0-9a-fA-F]{40}$/.test(raw)) return null;
+  return raw as `0x${string}`;
+}
+
 function requireSecret(req: Request) {
   const hdr =
     req.headers.get('x-leaderboard-secret') ??
@@ -52,6 +60,106 @@ type Acc = {
   tipsWei: string; // bigint as string for JSON
   score: number;
 };
+
+function mergeAcc(into: Map<string, Acc>, add: Acc) {
+  const key = add.user.toLowerCase();
+  const cur = into.get(key);
+  if (!cur) {
+    into.set(key, { ...add, user: key });
+    return;
+  }
+  cur.confessionCount += add.confessionCount;
+  cur.likes += add.likes;
+  cur.tipsWei = (BigInt(cur.tipsWei) + BigInt(add.tipsWei)).toString();
+  cur.score += add.score;
+}
+
+async function scanContract(opts: {
+  // PublicClient typing varies by chain (e.g. deposit txs on Base). Keep this helper generic.
+  client: any;
+  address: `0x${string}`;
+  fromBlock: bigint;
+  toBlock: bigint;
+}) {
+  const { client, address, fromBlock, toBlock } = opts;
+
+  const acc = new Map<string, Acc>();
+  const touch = (addr: string): Acc => {
+    const a = addr.toLowerCase();
+    const cur = acc.get(a);
+    if (cur) return cur;
+    const next: Acc = { user: a, confessionCount: 0, likes: 0, tipsWei: '0', score: 0 };
+    acc.set(a, next);
+    return next;
+  };
+  const addTips = (a: Acc, amount: bigint) => {
+    const cur = BigInt(a.tipsWei);
+    a.tipsWei = (cur + amount).toString();
+  };
+
+  const confessionOwner = new Map<bigint, string>(); // confessionId -> owner
+  const lastVote = new Map<string, number>(); // `${contract}:${confessionId}:${voter}` -> -1|1
+
+  let from = fromBlock;
+  while (from <= toBlock) {
+    const to = from + LOG_CHUNK_BLOCKS > toBlock ? toBlock : from + LOG_CHUNK_BLOCKS;
+
+    const [postedLogs, votedLogs, tippedLogs] = await Promise.all([
+      client.getLogs({ address, event: evPosted, fromBlock: from, toBlock: to }),
+      client.getLogs({ address, event: evVoted, fromBlock: from, toBlock: to }),
+      client.getLogs({ address, event: evTipped, fromBlock: from, toBlock: to }),
+    ]);
+
+    for (const l of postedLogs) {
+      const args = l.args as any;
+      const confessionId = args.confessionId as bigint;
+      const owner = (args.user as string).toLowerCase();
+      confessionOwner.set(confessionId, owner);
+      const u = touch(owner);
+      u.confessionCount += 1;
+      u.score += 1;
+    }
+
+    for (const l of votedLogs) {
+      const args = l.args as any;
+      const confessionId = args.confessionId as bigint;
+      const voter = (args.voter as string).toLowerCase();
+      const vote = Number(args.vote);
+      if (vote !== 1 && vote !== -1) continue;
+
+      const owner = confessionOwner.get(confessionId);
+      if (!owner) continue;
+      if (owner === voter) continue;
+
+      const k = `${address}:${confessionId.toString()}:${voter}`;
+      const prev = lastVote.get(k);
+      lastVote.set(k, vote);
+
+      if (prev === 1 && vote !== 1) {
+        const u = touch(owner);
+        u.likes = Math.max(0, u.likes - 1);
+        u.score = Math.max(0, u.score - 3);
+      } else if (prev !== 1 && vote === 1) {
+        const u = touch(owner);
+        u.likes += 1;
+        u.score += 3;
+      }
+    }
+
+    for (const l of tippedLogs) {
+      const args = l.args as any;
+      const toAddr = (args.to as string).toLowerCase();
+      const amount = args.amount as bigint;
+      const u = touch(toAddr);
+      addTips(u, amount);
+      u.score += 5;
+    }
+
+    from = to + BigInt(1);
+  }
+
+  return acc;
+}
 
 export async function POST(req: Request) {
   try {
@@ -92,7 +200,13 @@ export async function POST(req: Request) {
 
   const latest = await client.getBlockNumber();
   const deployFloorEnv = process.env.CONFESSIONS_DEPLOY_BLOCK;
-  const deployFloor = deployFloorEnv && /^\d+$/.test(deployFloorEnv) ? BigInt(deployFloorEnv) : BigInt(0);
+  const deployFloor =
+    deployFloorEnv && /^\d+$/.test(deployFloorEnv) ? BigInt(deployFloorEnv) : BigInt(0);
+
+  const legacyAddr = legacyContractAddress();
+  const legacyDeployEnv = process.env.LEGACY_CONFESSIONS_DEPLOY_BLOCK;
+  const legacyDeploy =
+    legacyDeployEnv && /^\d+$/.test(legacyDeployEnv) ? BigInt(legacyDeployEnv) : BigInt(0);
 
   let fromBlock = deployFloor;
   if (timeframe === 'daily') {
@@ -103,99 +217,31 @@ export async function POST(req: Request) {
   }
   if (fromBlock < deployFloor) fromBlock = deployFloor;
 
-  const blockTs = new Map<bigint, number>();
-  const getBlockTs = async (bn: bigint) => {
-    const cached = blockTs.get(bn);
-    if (cached != null) return cached;
-    const b = await client.getBlock({ blockNumber: bn });
-    const ts = Number(b.timestamp);
-    blockTs.set(bn, ts);
-    return ts;
-  };
+  const accAll = new Map<string, Acc>();
 
-  const acc = new Map<string, Acc>();
-  const touch = (addr: string): Acc => {
-    const a = addr.toLowerCase();
-    const cur = acc.get(a);
-    if (cur) return cur;
-    const next: Acc = { user: a, confessionCount: 0, likes: 0, tipsWei: '0', score: 0 };
-    acc.set(a, next);
-    return next;
-  };
-  const addTips = (a: Acc, amount: bigint) => {
-    const cur = BigInt(a.tipsWei);
-    a.tipsWei = (cur + amount).toString();
-  };
+  // New contract scan
+  const accNew = await scanContract({
+    client,
+    address: CONTRACT_ADDRESS,
+    fromBlock,
+    toBlock: latest,
+  });
+  for (const v of accNew.values()) mergeAcc(accAll, v);
 
-  const confessionOwner = new Map<bigint, string>(); // confessionId -> owner
-  const lastVote = new Map<string, number>(); // `${confessionId}:${voter}` -> -1|1
-
-  // Scan logs in chunks
-  let from = fromBlock;
-  while (from <= latest) {
-    const to = from + LOG_CHUNK_BLOCKS > latest ? latest : from + LOG_CHUNK_BLOCKS;
-
-    const [postedLogs, votedLogs, tippedLogs] = await Promise.all([
-      client.getLogs({ address: CONTRACT_ADDRESS, event: evPosted, fromBlock: from, toBlock: to }),
-      client.getLogs({ address: CONTRACT_ADDRESS, event: evVoted, fromBlock: from, toBlock: to }),
-      client.getLogs({ address: CONTRACT_ADDRESS, event: evTipped, fromBlock: from, toBlock: to }),
-    ]);
-
-    // Warm timestamp cache for blocks we touched (only for potential future use / debugging).
-    const blocks = new Set<bigint>();
-    for (const l of postedLogs) blocks.add(l.blockNumber!);
-    for (const l of votedLogs) blocks.add(l.blockNumber!);
-    for (const l of tippedLogs) blocks.add(l.blockNumber!);
-    await Promise.all(Array.from(blocks).map((bn) => getBlockTs(bn)));
-
-    for (const l of postedLogs) {
-      const args = l.args as any;
-      const confessionId = args.confessionId as bigint;
-      const owner = (args.user as string).toLowerCase();
-      confessionOwner.set(confessionId, owner);
-      const u = touch(owner);
-      u.confessionCount += 1;
-      u.score += 1;
-    }
-    for (const l of votedLogs) {
-      const args = l.args as any;
-      const confessionId = args.confessionId as bigint;
-      const voter = (args.voter as string).toLowerCase();
-      const vote = Number(args.vote);
-      if (vote !== 1 && vote !== -1) continue;
-
-      const owner = confessionOwner.get(confessionId);
-      if (!owner) continue;
-      if (owner === voter) continue; // ignore self votes for leaderboard
-
-      const k = `${confessionId.toString()}:${voter}`;
-      const prev = lastVote.get(k);
-      lastVote.set(k, vote);
-
-      // We only score likes (+3). Handle flips: +1->-1 removes like, -1->+1 adds like.
-      if (prev === 1 && vote !== 1) {
-        const u = touch(owner);
-        u.likes = Math.max(0, u.likes - 1);
-        u.score = Math.max(0, u.score - 3);
-      } else if (prev !== 1 && vote === 1) {
-        const u = touch(owner);
-        u.likes += 1;
-        u.score += 3;
-      }
-    }
-    for (const l of tippedLogs) {
-      const args = l.args as any;
-      const toAddr = (args.to as string).toLowerCase();
-      const amount = args.amount as bigint;
-      const u = touch(toAddr);
-      addTips(u, amount);
-      u.score += 5;
-    }
-
-    from = to + BigInt(1);
+  // Legacy contract scan (optional)
+  let legacyFromBlock = fromBlock;
+  if (legacyAddr) {
+    if (legacyFromBlock < legacyDeploy) legacyFromBlock = legacyDeploy;
+    const accLegacy = await scanContract({
+      client,
+      address: legacyAddr,
+      fromBlock: legacyFromBlock,
+      toBlock: latest,
+    });
+    for (const v of accLegacy.values()) mergeAcc(accAll, v);
   }
 
-  const entries = Array.from(acc.values())
+  const entries = Array.from(accAll.values())
     .sort((a, b) => (b.score - a.score) || (b.confessionCount - a.confessionCount) || a.user.localeCompare(b.user))
     .map((e, idx) => ({
       rank: idx + 1,
@@ -242,6 +288,7 @@ export async function POST(req: Request) {
     fromBlock: fromBlock.toString(),
     toBlock: latest.toString(),
     count: entries.length,
+    legacyIncluded: Boolean(legacyAddr),
   });
 }
 
