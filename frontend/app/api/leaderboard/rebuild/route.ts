@@ -200,7 +200,18 @@ export async function POST(req: Request) {
     );
 
   if (error) {
-    return NextResponse.json({ error: 'Failed to write cache.' }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: 'Failed to write cache.',
+        supabase: {
+          message: error.message,
+          details: (error as any).details ?? null,
+          hint: (error as any).hint ?? null,
+          code: (error as any).code ?? null,
+        },
+      },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({
