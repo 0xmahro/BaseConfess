@@ -32,6 +32,8 @@ const DEFAULT_APP_URL = 'https://baseconfess.fun';
 const LOG_CHUNK_BLOCKS = BigInt(1999);
 /** ~24h on Base (~2s blocks) — used only for the 24H stat strip. */
 const BLOCKS_24H_APPROX = BigInt(45000);
+const LOG_MIN_CHUNK_BLOCKS = BigInt(80);
+const LOG_RETRY_MAX = 2;
 
 /** If `totalTests()` RPC never settles, fall back to log scan after this long. */
 const TOTAL_TESTS_STALL_MS = 6000;
@@ -59,6 +61,69 @@ async function findLoveMeterDeploymentBlock(
     else low = mid + BigInt(1);
   }
   return low;
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Counts LoveTested logs robustly across RPC providers:
+ * - scans in chunks
+ * - retries transient errors
+ * - bisects range when provider rejects large getLogs windows
+ */
+async function countLoveTestedLogs(
+  client: PublicClient,
+  fromBlock: bigint,
+  toBlock: bigint,
+  shouldStop?: () => boolean
+): Promise<number> {
+  if (fromBlock > toBlock) return 0;
+
+  let total = 0;
+  const queue: { from: bigint; to: bigint; attempt: number }[] = [
+    { from: fromBlock, to: toBlock, attempt: 0 },
+  ];
+
+  while (queue.length > 0) {
+    if (shouldStop?.()) break;
+    const cur = queue.pop()!;
+    if (cur.from > cur.to) continue;
+
+    try {
+      // Keep each call bounded; larger ranges are split below when needed.
+      const boundedTo =
+        cur.from + LOG_CHUNK_BLOCKS > cur.to ? cur.to : cur.from + LOG_CHUNK_BLOCKS;
+      const logs = await client.getLogs({
+        address: LOVE_METER_CONTRACT_ADDRESS,
+        event: loveTestedEvent,
+        fromBlock: cur.from,
+        toBlock: boundedTo,
+      });
+      total += logs.length;
+
+      if (boundedTo < cur.to) {
+        queue.push({ from: boundedTo + BigInt(1), to: cur.to, attempt: 0 });
+      }
+    } catch (err) {
+      const span = cur.to - cur.from;
+      if (span > LOG_MIN_CHUNK_BLOCKS) {
+        const mid = cur.from + span / BigInt(2);
+        queue.push({ from: mid + BigInt(1), to: cur.to, attempt: 0 });
+        queue.push({ from: cur.from, to: mid, attempt: 0 });
+        continue;
+      }
+      if (cur.attempt < LOG_RETRY_MAX) {
+        await delay(250 * (cur.attempt + 1));
+        queue.push({ ...cur, attempt: cur.attempt + 1 });
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  return total;
 }
 
 function formatMeasurementCount(n: number): string {
@@ -307,7 +372,7 @@ export default function AskTestPage() {
         setEventCountLoading(true);
         return;
       }
-      setEventBackedCount(null);
+      setEventBackedCount(0);
       setEventCountLoading(false);
       return;
     }
@@ -318,23 +383,15 @@ export default function AskTestPage() {
     (async () => {
       try {
         const latest = await publicClient.getBlockNumber();
-        let from = effectiveDeployBlock;
-        let count = 0;
-        while (from <= latest && !cancelled) {
-          const to =
-            from + LOG_CHUNK_BLOCKS > latest ? latest : from + LOG_CHUNK_BLOCKS;
-          const logs = await publicClient.getLogs({
-            address: LOVE_METER_CONTRACT_ADDRESS,
-            event: loveTestedEvent,
-            fromBlock: from,
-            toBlock: to,
-          });
-          count += logs.length;
-          from = to + BigInt(1);
-        }
+        const count = await countLoveTestedLogs(
+          publicClient,
+          effectiveDeployBlock,
+          latest,
+          () => cancelled
+        );
         if (!cancelled) setEventBackedCount(count);
       } catch {
-        if (!cancelled) setEventBackedCount(null);
+        if (!cancelled) setEventBackedCount(0);
       } finally {
         if (!cancelled) setEventCountLoading(false);
       }
@@ -378,23 +435,10 @@ export default function AskTestPage() {
           return;
         }
 
-        let count = 0;
-        let pos = from;
-        while (pos <= latest && !cancelled) {
-          const to =
-            pos + LOG_CHUNK_BLOCKS > latest ? latest : pos + LOG_CHUNK_BLOCKS;
-          const logs = await publicClient.getLogs({
-            address: LOVE_METER_CONTRACT_ADDRESS,
-            event: loveTestedEvent,
-            fromBlock: pos,
-            toBlock: to,
-          });
-          count += logs.length;
-          pos = to + BigInt(1);
-        }
+        const count = await countLoveTestedLogs(publicClient, from, latest, () => cancelled);
         if (!cancelled) setLast24hCount(count);
       } catch {
-        if (!cancelled) setLast24hCount(null);
+        if (!cancelled) setLast24hCount(0);
       } finally {
         if (!cancelled) setLast24hLoading(false);
       }
@@ -465,8 +509,10 @@ export default function AskTestPage() {
     !totalTestsReadError &&
     !totalTestsStalled;
 
-  // Avoid indefinite "..." when fallback scans are slow/rate-limited.
-  const measurementsLoading = chainId === base.id && waitingOnTotalTestsRpc;
+  const hasTotalValue = typeof totalTestsWei === 'bigint' || eventBackedCount !== null;
+  const measurementsLoading =
+    chainId === base.id &&
+    (waitingOnTotalTestsRpc || (!hasTotalValue && (eventCountLoading || inferDeployLoading)));
 
   const measurementsValue: number | null =
     typeof totalTestsWei === 'bigint' ? Number(totalTestsWei) : eventBackedCount;
