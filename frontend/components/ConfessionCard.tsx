@@ -18,6 +18,7 @@ interface ConfessionCardProps {
   initialFakeVotes: number;
   initialHasVoted: boolean;
   canTruthVote: boolean;
+  existsOnCurrentContract: boolean;
   username?:  string | null;
 }
 
@@ -54,6 +55,7 @@ export function ConfessionCard({
   initialFakeVotes,
   initialHasVoted,
   canTruthVote,
+  existsOnCurrentContract,
   username,
 }: ConfessionCardProps) {
   const { address, isConnected } = useAccount();
@@ -103,6 +105,7 @@ export function ConfessionCard({
 
   const avatarGradient = walletColor(confession.wallet);
   const truthVoteBlocked = !hasVoted && !canTruthVote;
+  const legacyConfession = !existsOnCurrentContract;
   const hasGasForTx = (nativeBalance?.value ?? BigInt(0)) > BigInt(0);
 
   useEffect(() => {
@@ -116,6 +119,10 @@ export function ConfessionCard({
 
   const handleLegacyVote = async (voteType: VoteType) => {
     if (!isConnected || !address) return;
+    if (legacyConfession) {
+      setLegacyVoteError('Bu itiraf eski kontrattan. Yeni kontrat uzerinde oy verilemez.');
+      return;
+    }
     if (wrongChain) {
       setLegacyVoteError('Switch to Base');
       return;
@@ -179,6 +186,10 @@ export function ConfessionCard({
 
   const handleTruthVote = (isReal: boolean) => {
     if (!isConnected || !address) return;
+    if (legacyConfession) {
+      setTruthLocalError('Bu itiraf eski kontrattan. Truth vote kullanilamaz.');
+      return;
+    }
     if (wrongChain) {
       setTruthLocalError('Switch to Base Mainnet to vote.');
       return;
@@ -287,7 +298,7 @@ export function ConfessionCard({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button
               onClick={() => handleLegacyVote(1)}
-              disabled={!isConnected || !!voteTxHash}
+              disabled={!isConnected || !!voteTxHash || legacyConfession}
               className={`
                 flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-bold
                 border bg-white transition-all duration-150 active:scale-95
@@ -305,7 +316,7 @@ export function ConfessionCard({
             </button>
             <button
               onClick={() => handleLegacyVote(-1)}
-              disabled={!isConnected || !!voteTxHash}
+              disabled={!isConnected || !!voteTxHash || legacyConfession}
               className={`
                 flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-bold
                 border bg-white transition-all duration-150 active:scale-95
@@ -323,7 +334,7 @@ export function ConfessionCard({
             </button>
             <button
               onClick={() => handleTruthVote(true)}
-              disabled={!isConnected || !address || wrongChain || isVoting || hasVoted || truthVoteBlocked}
+              disabled={!isConnected || !address || wrongChain || isVoting || hasVoted || truthVoteBlocked || legacyConfession}
               className="flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-bold
                 border border-pink-200 text-mauve bg-white
                 hover:bg-pink-50 hover:border-pink-300
@@ -333,7 +344,7 @@ export function ConfessionCard({
             </button>
             <button
               onClick={() => handleTruthVote(false)}
-              disabled={!isConnected || !address || wrongChain || isVoting || hasVoted || truthVoteBlocked}
+              disabled={!isConnected || !address || wrongChain || isVoting || hasVoted || truthVoteBlocked || legacyConfession}
               className="flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-bold
                 border border-pink-200 text-mauve bg-white
                 hover:bg-pink-50 hover:border-pink-300
@@ -392,6 +403,11 @@ export function ConfessionCard({
           )}
           {legacyVoteError && (
             <div className="text-[11px] font-bold text-red-500">{legacyVoteError}</div>
+          )}
+          {legacyConfession && (
+            <p className="text-[11px] font-semibold text-amber-600">
+              Bu kart eski kontrat kaydi. Oy islemleri sadece yeni kontrat itiraflarinda acik.
+            </p>
           )}
           {truthVoteBlocked && isConnected && (
             <p className="text-[11px] font-semibold text-amber-600">

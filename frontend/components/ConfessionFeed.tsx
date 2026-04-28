@@ -20,7 +20,7 @@ const PAGE_SIZE = 30;
 
 /** Rows loaded for sorting/pagination; real total can be higher (see totalCount). */
 const FEED_FETCH_LIMIT = 2000;
-type TruthSnapshot = { real: number; fake: number; hasVoted: boolean };
+type TruthSnapshot = { real: number; fake: number; hasVoted: boolean; existsOnCurrentContract: boolean };
 
 function sortConfessions(list: Confession[], key: SortKey): Confession[] {
   const copy = [...list];
@@ -230,6 +230,12 @@ export function ConfessionFeed() {
   const truthContracts = useMemo(() => {
     return paginated.flatMap((c) => {
       const confessionId = BigInt(c.id);
+      const ownerCall = {
+        address: CONTRACT_ADDRESS,
+        abi: CONTRACT_ABI,
+        functionName: 'confessionOwner' as const,
+        args: [confessionId],
+      };
       const statsCall = {
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
@@ -237,8 +243,9 @@ export function ConfessionFeed() {
         args: [confessionId],
       };
 
-      if (!address) return [statsCall];
+      if (!address) return [ownerCall, statsCall];
       return [
+        ownerCall,
         statsCall,
         {
           address: CONTRACT_ADDRESS,
@@ -281,13 +288,20 @@ export function ConfessionFeed() {
 
     for (let i = 0; i < paginated.length; i += 1) {
       const confessionId = paginated[i].id;
-      const baseIdx = address ? i * 2 : i;
-      const statsRes = truthReads[baseIdx];
-      const votedRes = address ? truthReads[baseIdx + 1] : null;
+      const baseIdx = address ? i * 3 : i * 2;
+      const ownerRes = truthReads[baseIdx];
+      const statsRes = truthReads[baseIdx + 1];
+      const votedRes = address ? truthReads[baseIdx + 2] : null;
 
       let real = 0;
       let fake = 0;
       let hasVoted = false;
+      let existsOnCurrentContract = false;
+
+      if (ownerRes?.status === 'success') {
+        const owner = String(ownerRes.result ?? '').toLowerCase();
+        existsOnCurrentContract = owner !== '0x0000000000000000000000000000000000000000';
+      }
 
       if (statsRes?.status === 'success') {
         const stats = statsRes.result as [bigint, bigint];
@@ -298,7 +312,7 @@ export function ConfessionFeed() {
         hasVoted = Boolean(votedRes.result as boolean);
       }
 
-      map[confessionId] = { real, fake, hasVoted };
+      map[confessionId] = { real, fake, hasVoted, existsOnCurrentContract };
     }
     return map;
   }, [truthReads, paginated, address]);
@@ -440,6 +454,7 @@ export function ConfessionFeed() {
           initialFakeVotes={truthByConfessionId[confession.id]?.fake ?? 0}
           initialHasVoted={truthByConfessionId[confession.id]?.hasVoted ?? false}
           canTruthVote={canTruthVote}
+          existsOnCurrentContract={truthByConfessionId[confession.id]?.existsOnCurrentContract ?? false}
           username={walletToUsername[confession.wallet.toLowerCase()] ?? null}
         />
       ))}
