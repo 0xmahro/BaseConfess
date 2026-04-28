@@ -36,9 +36,9 @@ export default function Home() {
 
         {/* Screen switcher */}
         <div
-          className="flex overflow-x-auto no-scrollbar p-2 rounded-3xl bg-white border border-pink-200 shadow-card gap-1.5"
+          className="grid grid-cols-3 md:grid-cols-5 p-2 rounded-3xl bg-white border border-pink-200 shadow-card gap-1.5"
           role="tablist"
-          aria-label="Choose Confess, Wish Box, or Love Meter"
+          aria-label="Choose Confess, Wish Box, Love Meter, Top Souls, or Profiles"
         >
           <button
             type="button"
@@ -46,7 +46,7 @@ export default function Home() {
             aria-selected={tab === 'confess'}
             onClick={() => setTab('confess')}
             className={`
-              min-w-[118px] sm:min-w-0 flex-1 flex items-center justify-center gap-1.5 py-3.5 px-3 rounded-2xl text-sm font-extrabold
+              w-full flex items-center justify-center gap-1.5 py-3.5 px-3 rounded-2xl text-sm font-extrabold
               transition-all duration-200 active:scale-[0.98]
               ${tab === 'confess'
                 ? 'bg-gradient-to-r from-pink-500 to-pink-400 text-white shadow-pink'
@@ -63,7 +63,7 @@ export default function Home() {
             aria-selected={tab === 'wish'}
             onClick={() => setTab('wish')}
             className={`
-              min-w-[118px] sm:min-w-0 flex-1 flex items-center justify-center gap-1.5 py-3.5 px-3 rounded-2xl text-sm font-extrabold
+              w-full flex items-center justify-center gap-1.5 py-3.5 px-3 rounded-2xl text-sm font-extrabold
               transition-all duration-200 active:scale-[0.98]
               ${tab === 'wish'
                 ? 'bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white shadow-[0_4px_16px_rgba(124,58,237,0.35)]'
@@ -80,7 +80,7 @@ export default function Home() {
             aria-selected={tab === 'love'}
             onClick={() => setTab('love')}
             className={`
-              min-w-[118px] sm:min-w-0 flex-1 flex items-center justify-center gap-1.5 py-3.5 px-3 rounded-2xl text-sm font-extrabold
+              w-full flex items-center justify-center gap-1.5 py-3.5 px-3 rounded-2xl text-sm font-extrabold
               transition-all duration-200 active:scale-[0.98]
               ${tab === 'love'
                 ? 'bg-gradient-to-r from-fuchsia-500 to-indigo-500 text-white shadow-[0_4px_16px_rgba(99,102,241,0.30)]'
@@ -95,7 +95,7 @@ export default function Home() {
             href="/top"
             role="tab"
             className={`
-              min-w-[118px] sm:min-w-0 flex-1 flex items-center justify-center gap-1.5 py-3.5 px-3 rounded-2xl text-sm font-extrabold
+              w-full flex items-center justify-center gap-1.5 py-3.5 px-3 rounded-2xl text-sm font-extrabold
               transition-all duration-200 active:scale-[0.98]
               text-[#7f758f] hover:text-pink-500 hover:bg-pink-50/80
             `}
@@ -107,7 +107,7 @@ export default function Home() {
             href="/profiles"
             role="tab"
             className={`
-              min-w-[118px] sm:min-w-0 flex-1 flex items-center justify-center gap-1.5 py-3.5 px-3 rounded-2xl text-sm font-extrabold
+              w-full flex items-center justify-center gap-1.5 py-3.5 px-3 rounded-2xl text-sm font-extrabold
               transition-all duration-200 active:scale-[0.98]
               text-[#7f758f] hover:text-pink-500 hover:bg-pink-50/80
             `}
