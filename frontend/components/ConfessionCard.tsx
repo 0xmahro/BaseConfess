@@ -7,7 +7,7 @@ import { TipModal } from './TipModal';
 import type { Confession, VoteType } from '@/types';
 import Link from 'next/link';
 import { useTruthVoting } from '@/hooks/useTruthVoting';
-import { CONTRACT_ABI, CONTRACT_ADDRESS } from '@/lib/config';
+import { CONTRACT_ABI, CONTRACT_ADDRESS, LEGACY_CONTRACT_ADDRESS } from '@/lib/config';
 import { supabase } from '@/lib/supabase';
 
 interface ConfessionCardProps {
@@ -19,6 +19,7 @@ interface ConfessionCardProps {
   initialHasVoted: boolean;
   canTruthVote: boolean;
   existsOnCurrentContract: boolean;
+  existsOnLegacyContract: boolean;
   username?:  string | null;
 }
 
@@ -56,6 +57,7 @@ export function ConfessionCard({
   initialHasVoted,
   canTruthVote,
   existsOnCurrentContract,
+  existsOnLegacyContract,
   username,
 }: ConfessionCardProps) {
   const { address, isConnected } = useAccount();
@@ -106,6 +108,7 @@ export function ConfessionCard({
   const avatarGradient = walletColor(confession.wallet);
   const truthVoteBlocked = !hasVoted && !canTruthVote;
   const legacyConfession = !existsOnCurrentContract;
+  const canUseLikeDislike = existsOnCurrentContract || existsOnLegacyContract;
   const hasGasForTx = (nativeBalance?.value ?? BigInt(0)) > BigInt(0);
 
   useEffect(() => {
@@ -119,8 +122,8 @@ export function ConfessionCard({
 
   const handleLegacyVote = async (voteType: VoteType) => {
     if (!isConnected || !address) return;
-    if (legacyConfession) {
-      setLegacyVoteError('Bu itiraf eski kontrattan. Yeni kontrat uzerinde oy verilemez.');
+    if (!canUseLikeDislike) {
+      setLegacyVoteError('Bu itiraf icin oy kontrati bulunamadi.');
       return;
     }
     if (wrongChain) {
@@ -151,8 +154,11 @@ export function ConfessionCard({
     setLocalUserVote(voteType);
 
     try {
+      const voteContractAddress = existsOnCurrentContract
+        ? CONTRACT_ADDRESS
+        : LEGACY_CONTRACT_ADDRESS;
       const hash = await writeContractAsync({
-        address: CONTRACT_ADDRESS,
+        address: voteContractAddress,
         abi: CONTRACT_ABI,
         functionName: 'vote',
         args: [BigInt(confession.id), voteType],
@@ -298,7 +304,7 @@ export function ConfessionCard({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button
               onClick={() => handleLegacyVote(1)}
-              disabled={!isConnected || !!voteTxHash || legacyConfession}
+              disabled={!isConnected || !!voteTxHash || !canUseLikeDislike}
               className={`
                 flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-bold
                 border bg-white transition-all duration-150 active:scale-95
@@ -316,7 +322,7 @@ export function ConfessionCard({
             </button>
             <button
               onClick={() => handleLegacyVote(-1)}
-              disabled={!isConnected || !!voteTxHash || legacyConfession}
+              disabled={!isConnected || !!voteTxHash || !canUseLikeDislike}
               className={`
                 flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-bold
                 border bg-white transition-all duration-150 active:scale-95
@@ -406,7 +412,7 @@ export function ConfessionCard({
           )}
           {legacyConfession && (
             <p className="text-[11px] font-semibold text-amber-600">
-              Bu kart eski kontrat kaydi. Oy islemleri sadece yeni kontrat itiraflarinda acik.
+              Bu kart eski kontrat kaydi. Like/Dislike aktif, Truth vote sadece yeni kontratta acik.
             </p>
           )}
           {truthVoteBlocked && isConnected && (

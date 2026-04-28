@@ -5,7 +5,7 @@ import { useAccount, useReadContracts } from 'wagmi';
 import { supabase }   from '@/lib/supabase';
 import { ConfessionCard } from './ConfessionCard';
 import type { Confession, UserVoteMap, VoteType } from '@/types';
-import { CONTRACT_ABI, CONTRACT_ADDRESS, PROFILE_CONTRACT_ABI, PROFILE_CONTRACT_ADDRESS } from '@/lib/config';
+import { CONTRACT_ABI, CONTRACT_ADDRESS, LEGACY_CONTRACT_ADDRESS, PROFILE_CONTRACT_ABI, PROFILE_CONTRACT_ADDRESS } from '@/lib/config';
 
 type SortKey = 'newest' | 'most_liked' | 'most_disliked' | 'most_tipped';
 
@@ -20,7 +20,13 @@ const PAGE_SIZE = 30;
 
 /** Rows loaded for sorting/pagination; real total can be higher (see totalCount). */
 const FEED_FETCH_LIMIT = 2000;
-type TruthSnapshot = { real: number; fake: number; hasVoted: boolean; existsOnCurrentContract: boolean };
+type TruthSnapshot = {
+  real: number;
+  fake: number;
+  hasVoted: boolean;
+  existsOnCurrentContract: boolean;
+  existsOnLegacyContract: boolean;
+};
 
 function sortConfessions(list: Confession[], key: SortKey): Confession[] {
   const copy = [...list];
@@ -236,6 +242,12 @@ export function ConfessionFeed() {
         functionName: 'confessionOwner' as const,
         args: [confessionId],
       };
+      const legacyOwnerCall = {
+        address: LEGACY_CONTRACT_ADDRESS,
+        abi: CONTRACT_ABI,
+        functionName: 'confessionOwner' as const,
+        args: [confessionId],
+      };
       const statsCall = {
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
@@ -243,9 +255,10 @@ export function ConfessionFeed() {
         args: [confessionId],
       };
 
-      if (!address) return [ownerCall, statsCall];
+      if (!address) return [ownerCall, legacyOwnerCall, statsCall];
       return [
         ownerCall,
+        legacyOwnerCall,
         statsCall,
         {
           address: CONTRACT_ADDRESS,
@@ -288,19 +301,25 @@ export function ConfessionFeed() {
 
     for (let i = 0; i < paginated.length; i += 1) {
       const confessionId = paginated[i].id;
-      const baseIdx = address ? i * 3 : i * 2;
+      const baseIdx = address ? i * 4 : i * 3;
       const ownerRes = truthReads[baseIdx];
-      const statsRes = truthReads[baseIdx + 1];
-      const votedRes = address ? truthReads[baseIdx + 2] : null;
+      const legacyOwnerRes = truthReads[baseIdx + 1];
+      const statsRes = truthReads[baseIdx + 2];
+      const votedRes = address ? truthReads[baseIdx + 3] : null;
 
       let real = 0;
       let fake = 0;
       let hasVoted = false;
       let existsOnCurrentContract = false;
+      let existsOnLegacyContract = false;
 
       if (ownerRes?.status === 'success') {
         const owner = String(ownerRes.result ?? '').toLowerCase();
         existsOnCurrentContract = owner !== '0x0000000000000000000000000000000000000000';
+      }
+      if (legacyOwnerRes?.status === 'success') {
+        const legacyOwner = String(legacyOwnerRes.result ?? '').toLowerCase();
+        existsOnLegacyContract = legacyOwner !== '0x0000000000000000000000000000000000000000';
       }
 
       if (statsRes?.status === 'success') {
@@ -312,7 +331,13 @@ export function ConfessionFeed() {
         hasVoted = Boolean(votedRes.result as boolean);
       }
 
-      map[confessionId] = { real, fake, hasVoted, existsOnCurrentContract };
+      map[confessionId] = {
+        real,
+        fake,
+        hasVoted,
+        existsOnCurrentContract,
+        existsOnLegacyContract,
+      };
     }
     return map;
   }, [truthReads, paginated, address]);
@@ -455,6 +480,7 @@ export function ConfessionFeed() {
           initialHasVoted={truthByConfessionId[confession.id]?.hasVoted ?? false}
           canTruthVote={canTruthVote}
           existsOnCurrentContract={truthByConfessionId[confession.id]?.existsOnCurrentContract ?? false}
+          existsOnLegacyContract={truthByConfessionId[confession.id]?.existsOnLegacyContract ?? false}
           username={walletToUsername[confession.wallet.toLowerCase()] ?? null}
         />
       ))}
