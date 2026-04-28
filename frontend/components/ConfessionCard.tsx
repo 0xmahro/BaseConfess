@@ -152,7 +152,19 @@ export function ConfessionCard({
       const normalized = msg.toLowerCase();
       const rejected =
         normalized.includes('user rejected') || normalized.includes('denied');
-      setLegacyVoteError(rejected ? '' : 'Like/Dislike vote failed');
+      if (rejected) {
+        setLegacyVoteError('');
+      } else if (
+        normalized.includes('insufficient funds') ||
+        normalized.includes('gas required exceeds allowance') ||
+        normalized.includes('intrinsic gas too low')
+      ) {
+        setLegacyVoteError('Oy icin cuzdanda biraz Base ETH olmali (gas).');
+      } else if (normalized.includes('confession not found')) {
+        setLegacyVoteError('Bu itiraf eski kontratta oldugu icin oy verilemiyor.');
+      } else {
+        setLegacyVoteError('Like/Dislike oyu gonderilemedi. Tekrar dene.');
+      }
     }
   };
 
@@ -262,7 +274,10 @@ export function ConfessionCard({
                 }
               `}
             >
-              🤍 Like {localLikes}
+              <span className="inline-flex items-center gap-1.5">
+                <span>🤍</span>
+                <span>{localLikes}</span>
+              </span>
             </button>
             <button
               onClick={() => handleLegacyVote(-1)}
@@ -276,7 +291,10 @@ export function ConfessionCard({
                 }
               `}
             >
-              🖤 Dislike {localDislikes}
+              <span className="inline-flex items-center gap-1.5">
+                <span>🖤</span>
+                <span>{localDislikes}</span>
+              </span>
             </button>
             <button
               onClick={() => submitVote(true)}
