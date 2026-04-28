@@ -168,6 +168,7 @@ export function ConfessionCard({
         abi: CONTRACT_ABI,
         functionName: 'vote',
         args: [BigInt(confession.id), voteType],
+        gas: BigInt(200000),
       });
       pendingVoteRef.current = voteType;
       setVoteTxHash(hash);

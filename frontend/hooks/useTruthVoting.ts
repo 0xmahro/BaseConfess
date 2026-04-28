@@ -62,6 +62,7 @@ export function useTruthVoting({
         abi: CONTRACT_ABI,
         functionName: 'voteTruth',
         args: [BigInt(confessionId), isReal],
+        gas: BigInt(220000),
       });
       setTxHash(hash);
     } catch (err: unknown) {
