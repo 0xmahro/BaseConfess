@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useAccount, useChainId, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
+import { useAccount, useBalance, useChainId, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
 import { base } from 'wagmi/chains';
 import { TipModal } from './TipModal';
 import type { Confession, VoteType } from '@/types';
@@ -60,6 +60,11 @@ export function ConfessionCard({
   const { address, isConnected } = useAccount();
   const chainId    = useChainId();
   const wrongChain = isConnected && chainId !== base.id;
+  const { data: nativeBalance } = useBalance({
+    address,
+    chainId: base.id,
+    query: { enabled: Boolean(address) && isConnected },
+  });
 
   const [showTipModal,  setShowTipModal]  = useState(false);
   const [localLikes,    setLocalLikes]    = useState(confession.likes);
@@ -67,6 +72,7 @@ export function ConfessionCard({
   const [localUserVote, setLocalUserVote] = useState<VoteType | undefined>(userVote);
   const [voteTxHash,    setVoteTxHash]    = useState<`0x${string}` | undefined>();
   const [legacyVoteError, setLegacyVoteError] = useState('');
+  const [truthLocalError, setTruthLocalError] = useState('');
   const [likePopped,    setLikePopped]    = useState(false);
   const pendingVoteRef = useRef<VoteType | null>(null);
   const { writeContractAsync } = useWriteContract();
@@ -98,6 +104,7 @@ export function ConfessionCard({
 
   const avatarGradient = walletColor(confession.wallet);
   const truthVoteBlocked = !hasVoted && !canTruthVote;
+  const hasGasForTx = (nativeBalance?.value ?? BigInt(0)) > BigInt(0);
 
   useEffect(() => {
     setLocalLikes(confession.likes);
@@ -112,6 +119,10 @@ export function ConfessionCard({
     if (!isConnected || !address) return;
     if (wrongChain) {
       setLegacyVoteError('Switch to Base');
+      return;
+    }
+    if (!hasGasForTx) {
+      setLegacyVoteError('Base aginda gas icin ETH yok. Biraz Base ETH gonder.');
       return;
     }
     setLegacyVoteError('');
@@ -166,6 +177,20 @@ export function ConfessionCard({
         setLegacyVoteError('Like/Dislike oyu gonderilemedi. Tekrar dene.');
       }
     }
+  };
+
+  const handleTruthVote = (isReal: boolean) => {
+    if (!isConnected || !address) return;
+    if (wrongChain) {
+      setTruthLocalError('Switch to Base Mainnet to vote.');
+      return;
+    }
+    if (!hasGasForTx) {
+      setTruthLocalError('Base aginda gas icin ETH yok. Biraz Base ETH gonder.');
+      return;
+    }
+    setTruthLocalError('');
+    submitVote(isReal);
   };
 
   useEffect(() => {
@@ -260,17 +285,18 @@ export function ConfessionCard({
         </div>
 
         {/* 4-button voting area */}
-        <div className="rounded-2xl border border-pink-200 bg-pink-50/60 p-3 space-y-2.5">
+        <div className="space-y-2 pt-1">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button
               onClick={() => handleLegacyVote(1)}
               disabled={!isConnected || !!voteTxHash}
               className={`
-                h-10 rounded-xl text-sm font-extrabold border transition-all duration-200 active:scale-[0.98]
-                disabled:opacity-40 disabled:cursor-not-allowed ${likePopped ? 'animate-heart-pop' : ''}
+                flex items-center justify-center gap-1.5 h-10 rounded-full text-xs font-bold
+                border bg-white transition-all duration-150 active:scale-95
+                disabled:opacity-30 disabled:cursor-not-allowed ${likePopped ? 'animate-heart-pop' : ''}
                 ${localUserVote === 1
-                  ? 'bg-green-50 border-green-300 text-green-600'
-                  : 'bg-white border-pink-200 text-mauve hover:border-green-300 hover:text-green-500 hover:bg-green-50'
+                  ? 'border-green-300 text-green-600 bg-green-50'
+                  : 'border-pink-200 text-mauve hover:bg-pink-50 hover:border-pink-300'
                 }
               `}
             >
@@ -283,11 +309,12 @@ export function ConfessionCard({
               onClick={() => handleLegacyVote(-1)}
               disabled={!isConnected || !!voteTxHash}
               className={`
-                h-10 rounded-xl text-sm font-extrabold border transition-all duration-200 active:scale-[0.98]
-                disabled:opacity-40 disabled:cursor-not-allowed
+                flex items-center justify-center gap-1.5 h-10 rounded-full text-xs font-bold
+                border bg-white transition-all duration-150 active:scale-95
+                disabled:opacity-30 disabled:cursor-not-allowed
                 ${localUserVote === -1
-                  ? 'bg-red-50 border-red-300 text-red-500'
-                  : 'bg-white border-pink-200 text-mauve hover:border-red-300 hover:text-red-400 hover:bg-red-50'
+                  ? 'border-red-300 text-red-500 bg-red-50'
+                  : 'border-pink-200 text-mauve hover:bg-pink-50 hover:border-pink-300'
                 }
               `}
             >
@@ -297,20 +324,22 @@ export function ConfessionCard({
               </span>
             </button>
             <button
-              onClick={() => submitVote(true)}
+              onClick={() => handleTruthVote(true)}
               disabled={!isConnected || !address || wrongChain || isVoting || hasVoted || truthVoteBlocked}
-              className="h-10 rounded-xl text-sm font-extrabold border border-sky-200 bg-white text-sky-600
-                hover:bg-sky-50 hover:border-sky-300 hover:shadow-[0_0_24px_rgba(56,189,248,0.24)]
-                transition-all duration-200 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center justify-center gap-1.5 h-10 rounded-full text-xs font-bold
+                border border-pink-200 text-mauve bg-white
+                hover:bg-pink-50 hover:border-pink-300
+                transition-all duration-150 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
             >
               🕵️ Real
             </button>
             <button
-              onClick={() => submitVote(false)}
+              onClick={() => handleTruthVote(false)}
               disabled={!isConnected || !address || wrongChain || isVoting || hasVoted || truthVoteBlocked}
-              className="h-10 rounded-xl text-sm font-extrabold border border-fuchsia-200 bg-white text-fuchsia-600
-                hover:bg-fuchsia-50 hover:border-fuchsia-300 hover:shadow-[0_0_24px_rgba(217,70,239,0.24)]
-                transition-all duration-200 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center justify-center gap-1.5 h-10 rounded-full text-xs font-bold
+                border border-pink-200 text-mauve bg-white
+                hover:bg-pink-50 hover:border-pink-300
+                transition-all duration-150 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
             >
               🎭 Fake
             </button>
@@ -359,6 +388,9 @@ export function ConfessionCard({
 
           {error && (
             <div className="text-[11px] font-bold text-red-500">{error}</div>
+          )}
+          {truthLocalError && (
+            <div className="text-[11px] font-bold text-red-500">{truthLocalError}</div>
           )}
           {legacyVoteError && (
             <div className="text-[11px] font-bold text-red-500">{legacyVoteError}</div>
