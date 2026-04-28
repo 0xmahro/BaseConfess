@@ -1,19 +1,18 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useChainId } from 'wagmi';
+import { useState } from 'react';
+import { useAccount, useChainId } from 'wagmi';
 import { base } from 'wagmi/chains';
-import { builderCodeTxOpts } from '@/lib/builderCode';
-import { CONTRACT_ADDRESS, CONTRACT_ABI } from '@/lib/config';
-import { supabase } from '@/lib/supabase';
 import { TipModal } from './TipModal';
-import type { Confession, VoteType } from '@/types';
+import type { Confession } from '@/types';
 import Link from 'next/link';
+import { useTruthVoting } from '@/hooks/useTruthVoting';
 
 interface ConfessionCardProps {
   confession: Confession;
-  userVote:   VoteType | undefined;
-  onVoted:    (confessionId: number, vote: VoteType) => void;
+  initialRealVotes: number;
+  initialFakeVotes: number;
+  initialHasVoted: boolean;
   username?:  string | null;
 }
 
@@ -42,90 +41,34 @@ function walletColor(wallet: string): string {
   return colors[idx];
 }
 
-export function ConfessionCard({ confession, userVote, onVoted, username }: ConfessionCardProps) {
+export function ConfessionCard({
+  confession,
+  initialRealVotes,
+  initialFakeVotes,
+  initialHasVoted,
+  username,
+}: ConfessionCardProps) {
   const { address, isConnected } = useAccount();
   const chainId    = useChainId();
   const wrongChain = isConnected && chainId !== base.id;
 
   const [showTipModal,  setShowTipModal]  = useState(false);
-  const [localLikes,    setLocalLikes]    = useState(confession.likes);
-  const [localDislikes, setLocalDislikes] = useState(confession.dislikes);
-  const [localUserVote, setLocalUserVote] = useState<VoteType | undefined>(userVote);
-  const [voteTxHash,    setVoteTxHash]    = useState<`0x${string}` | undefined>();
-  const [voteError,     setVoteError]     = useState('');
-  const [likePopped,    setLikePopped]    = useState(false);
-
-  const pendingVoteRef = useRef<VoteType | null>(null);
-  const { writeContractAsync } = useWriteContract();
-  const { isSuccess: voteConfirmed } = useWaitForTransactionReceipt({ hash: voteTxHash });
-
-  const handleVote = async (voteType: VoteType) => {
-    if (!isConnected || !address) return;
-    if (wrongChain) { setVoteError('Switch to Base'); return; }
-    setVoteError('');
-
-    const prevVote    = localUserVote;
-    let   newLikes    = localLikes;
-    let   newDislikes = localDislikes;
-
-    if (prevVote === 1)  newLikes    = Math.max(0, newLikes - 1);
-    if (prevVote === -1) newDislikes = Math.max(0, newDislikes - 1);
-    if (voteType === 1)  { newLikes += 1; setLikePopped(true); setTimeout(() => setLikePopped(false), 400); }
-    if (voteType === -1) newDislikes += 1;
-
-    setLocalLikes(newLikes);
-    setLocalDislikes(newDislikes);
-    setLocalUserVote(voteType);
-
-    try {
-      const hash = await writeContractAsync({
-        address:      CONTRACT_ADDRESS,
-        abi:          CONTRACT_ABI,
-        functionName: 'vote',
-        args:         [BigInt(confession.id), voteType],
-        ...builderCodeTxOpts(),
-      });
-      pendingVoteRef.current = voteType;
-      setVoteTxHash(hash);
-      onVoted(confession.id, voteType);
-    } catch (err: unknown) {
-      setLocalLikes(confession.likes);
-      setLocalDislikes(confession.dislikes);
-      setLocalUserVote(prevVote);
-      const msg      = err instanceof Error ? err.message : '';
-      const rejected = msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('denied');
-      setVoteError(rejected ? '' : 'Vote failed');
-    }
-  };
-
-  useEffect(() => {
-    if (!voteConfirmed || !address || !pendingVoteRef.current) return;
-    const voteType     = pendingVoteRef.current;
-    const confessionId = confession.id;
-    const wallet       = address.toLowerCase();
-
-    const syncVote = async () => {
-      try {
-        await supabase.from('votes').upsert(
-          { confession_id: confessionId, wallet, vote: voteType },
-          { onConflict: 'confession_id,wallet' }
-        );
-        const { data: allVotes } = await supabase.from('votes').select('vote').eq('confession_id', confessionId);
-        if (allVotes) {
-          const likes    = allVotes.filter((v) => v.vote === 1).length;
-          const dislikes = allVotes.filter((v) => v.vote === -1).length;
-          await supabase.from('confessions').update({ likes, dislikes }).eq('id', confessionId);
-        }
-      } catch (err) {
-        console.error('[ConfessionCard] Vote sync error:', err);
-      } finally {
-        pendingVoteRef.current = null;
-        setVoteTxHash(undefined);
-      }
-    };
-    syncVote();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voteConfirmed]);
+  const {
+    realVotes,
+    fakeVotes,
+    totalVotes,
+    truthScore,
+    hasVoted,
+    isVoting,
+    error,
+    showSuccessToast,
+    submitVote,
+  } = useTruthVoting({
+    confessionId: confession.id,
+    initialRealVotes,
+    initialFakeVotes,
+    initialHasVoted,
+  });
 
   const [expanded, setExpanded] = useState(false);
   const CHAR_LIMIT = 180;
@@ -195,58 +138,85 @@ export function ConfessionCard({ confession, userVote, onVoted, username }: Conf
           )}
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center justify-between pt-1">
-          <div className="flex items-center gap-1.5">
+        {/* Truth voting */}
+        <div className="rounded-2xl border border-pink-200 bg-pink-50/60 p-3 space-y-2.5">
+          {!hasVoted ? (
+            <>
+              <p className="text-[11px] font-bold text-pink-500">
+                Vote to unlock truth results
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => submitVote(true)}
+                  disabled={!isConnected || !address || wrongChain || isVoting}
+                  className="h-10 rounded-xl text-sm font-extrabold border border-sky-200 bg-white text-sky-600
+                    hover:bg-sky-50 hover:border-sky-300 hover:shadow-[0_0_24px_rgba(56,189,248,0.24)]
+                    transition-all duration-200 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  🕵️ Real
+                </button>
+                <button
+                  onClick={() => submitVote(false)}
+                  disabled={!isConnected || !address || wrongChain || isVoting}
+                  className="h-10 rounded-xl text-sm font-extrabold border border-fuchsia-200 bg-white text-fuchsia-600
+                    hover:bg-fuchsia-50 hover:border-fuchsia-300 hover:shadow-[0_0_24px_rgba(217,70,239,0.24)]
+                    transition-all duration-200 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  🎭 Fake
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-2 animate-fade-in">
+              <p className="text-sm font-extrabold text-ink">
+                🧠 {truthScore}% think this is real
+              </p>
+              <div className="w-full h-2 rounded-full bg-pink-100 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-sky-400 to-blue-500 transition-all duration-500"
+                  style={{ width: `${truthScore}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px] font-bold text-[#7f758f]">
+                <span>🕵️ Real: {realVotes}</span>
+                <span>🎭 Fake: {fakeVotes}</span>
+                <span>{totalVotes} total</span>
+              </div>
+            </div>
+          )}
 
-            {/* Like */}
-            <button
-              onClick={() => handleVote(1)}
-              disabled={!isConnected || !!voteTxHash}
-              className={`
-                flex items-center gap-1.5 px-3 h-8 rounded-full text-xs font-bold
-                border transition-all duration-150 active:scale-95
-                disabled:opacity-40 disabled:cursor-not-allowed
-                ${likePopped ? 'animate-heart-pop' : ''}
-                ${localUserVote === 1
-                  ? 'bg-green-50 border-green-300 text-green-600'
-                  : 'bg-white border-pink-200 text-mauve hover:border-green-300 hover:text-green-500 hover:bg-green-50'
-                }
-              `}
-            >
-              <span className="text-sm">{localUserVote === 1 ? '💚' : '🤍'}</span>
-              <span>{localLikes}</span>
-            </button>
-
-            {/* Dislike */}
-            <button
-              onClick={() => handleVote(-1)}
-              disabled={!isConnected || !!voteTxHash}
-              className={`
-                flex items-center gap-1.5 px-3 h-8 rounded-full text-xs font-bold
-                border transition-all duration-150 active:scale-95
-                disabled:opacity-40 disabled:cursor-not-allowed
-                ${localUserVote === -1
-                  ? 'bg-red-50 border-red-300 text-red-500'
-                  : 'bg-white border-pink-200 text-mauve hover:border-red-300 hover:text-red-400 hover:bg-red-50'
-                }
-              `}
-            >
-              <span className="text-sm">{localUserVote === -1 ? '💔' : '🖤'}</span>
-              <span>{localDislikes}</span>
-            </button>
-
-            {/* Vote pending spinner */}
-            {voteTxHash && !voteConfirmed && (
-              <svg className="w-3.5 h-3.5 animate-spin text-pink-400" fill="none" viewBox="0 0 24 24">
+          {isVoting && (
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-pink-500">
+              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
               </svg>
-            )}
+              Submitting vote...
+            </div>
+          )}
 
-            {voteError && <span className="text-xs text-red-400 font-bold ml-1">{voteError}</span>}
+          {showSuccessToast && (
+            <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-[11px] font-extrabold text-green-600 animate-fade-in">
+              Vote submitted
+            </div>
+          )}
 
-            {/* Tips badge */}
+          {error && (
+            <div className="text-[11px] font-bold text-red-500">{error}</div>
+          )}
+
+          {!isConnected && (
+            <p className="text-[11px] font-semibold text-[#7f758f]">Connect wallet to vote.</p>
+          )}
+
+          {wrongChain && isConnected && (
+            <p className="text-[11px] font-semibold text-amber-600">Switch to Base Mainnet to vote.</p>
+          )}
+        </div>
+
+        {/* Footer actions */}
+        <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center gap-1.5">
             {confession.tips_received > 0 && (
               <span className="flex items-center gap-1 px-2.5 h-8 rounded-full text-xs font-bold border border-amber-200 bg-amber-50 text-amber-500">
                 💸 {confession.tips_received}
@@ -254,7 +224,6 @@ export function ConfessionCard({ confession, userVote, onVoted, username }: Conf
             )}
           </div>
 
-          {/* Tip button */}
           <button
             onClick={() => setShowTipModal(true)}
             disabled={!isConnected}

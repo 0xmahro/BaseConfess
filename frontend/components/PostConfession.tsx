@@ -9,7 +9,7 @@ import { CONTRACT_ADDRESS, CONTRACT_ABI, CONFESSION_FEE } from '@/lib/config';
 import { supabase } from '@/lib/supabase';
 
 const MAX_CHARS = 1000;
-const MIN_CONFESSION_CHARS = 5;
+const MIN_CONFESSION_CHARS = 15;
 
 export function PostConfession() {
   const { address, isConnected } = useAccount();
@@ -43,7 +43,7 @@ export function PostConfession() {
         address:      CONTRACT_ADDRESS,
         abi:          CONTRACT_ABI,
         functionName: 'postConfession',
-        args:         [confessionHash],
+        args:         [confessionHash, trimmed.length],
         value:        parseEther(CONFESSION_FEE),
         ...builderCodeTxOpts(),
       });

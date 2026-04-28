@@ -5,6 +5,7 @@ contract Confessions {
 
     /// @notice Total number of confessions posted (also the next confession id).
     uint256 public totalConfessions;
+    uint16 public constant MIN_CONFESSION_CHARS = 15;
 
     uint256 public confessionFee = 0.000025 ether;
 
@@ -13,6 +14,9 @@ contract Confessions {
     mapping(uint256 => address) public confessionOwner;
 
     mapping(uint256 => mapping(address => int8)) public votes;
+    mapping(uint256 => uint256) public realVotes;
+    mapping(uint256 => uint256) public fakeVotes;
+    mapping(uint256 => mapping(address => bool)) public hasVoted;
 
     // ─────────────────────────────────────────────────────────────────────────────
     // "Top Souls" leaderboard stats (per confession owner)
@@ -41,6 +45,11 @@ contract Confessions {
         address indexed to,
         uint256 amount
     );
+    event TruthVoted(
+        uint256 indexed confessionId,
+        address indexed voter,
+        bool isReal
+    );
 
     event FeeUpdated(uint256 newFee);
 
@@ -58,8 +67,9 @@ contract Confessions {
         emit FeeUpdated(newFee);
     }
 
-    function postConfession(bytes32 confessionHash) external payable {
+    function postConfession(bytes32 confessionHash, uint16 confessionCharCount) external payable {
         require(msg.value == confessionFee, "Incorrect fee");
+        require(confessionCharCount >= MIN_CONFESSION_CHARS, "Confession too short");
 
         totalConfessions++;
 
@@ -129,6 +139,30 @@ contract Confessions {
             confessionOwnerAddr,
             msg.value
         );
+    }
+
+    function voteTruth(uint256 confessionId, bool isReal) external {
+        require(confessionOwner[confessionId] != address(0), "Confession not found");
+        require(!hasVoted[confessionId][msg.sender], "Already voted");
+        require(confessionCount[msg.sender] > 0, "Post at least 1 confession");
+
+        hasVoted[confessionId][msg.sender] = true;
+
+        if (isReal) {
+            realVotes[confessionId] += 1;
+        } else {
+            fakeVotes[confessionId] += 1;
+        }
+
+        emit TruthVoted(confessionId, msg.sender, isReal);
+    }
+
+    function getTruthStats(uint256 confessionId)
+        external
+        view
+        returns (uint256 real, uint256 fake)
+    {
+        return (realVotes[confessionId], fakeVotes[confessionId]);
     }
 
     function getUserStats(address user)

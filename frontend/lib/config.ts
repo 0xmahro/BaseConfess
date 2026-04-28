@@ -8,7 +8,7 @@
 // ============================================================
 
 export const CONTRACT_ADDRESS =
-  '0xeaa890e6c93264B498773425b6f8f02726c143F4' as `0x${string}`;
+  '0x23BeF661be8c8C251613ac4fC486bc2915403E21' as `0x${string}`;
 
 export const CONFESSION_FEE = '0.000025'; // ETH — must match confessionFee in contract
 
@@ -262,6 +262,16 @@ export const CONTRACT_ABI = [
     ],
   },
   {
+    name: 'TruthVoted',
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      { name: 'confessionId', type: 'uint256', indexed: true, internalType: 'uint256' },
+      { name: 'voter', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'isReal', type: 'bool', indexed: false, internalType: 'bool' },
+    ],
+  },
+  {
     name: 'FeeUpdated',
     type: 'event',
     anonymous: false,
@@ -282,6 +292,13 @@ export const CONTRACT_ABI = [
     stateMutability: 'view',
     inputs: [],
     outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+  },
+  {
+    name: 'MIN_CONFESSION_CHARS',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint16', internalType: 'uint16' }],
   },
   {
     name: 'confessionFee',
@@ -325,7 +342,10 @@ export const CONTRACT_ABI = [
     name: 'postConfession',
     type: 'function',
     stateMutability: 'payable',
-    inputs: [{ name: 'confessionHash', type: 'bytes32', internalType: 'bytes32' }],
+    inputs: [
+      { name: 'confessionHash', type: 'bytes32', internalType: 'bytes32' },
+      { name: 'confessionCharCount', type: 'uint16', internalType: 'uint16' },
+    ],
     outputs: [],
   },
   {
@@ -344,6 +364,50 @@ export const CONTRACT_ABI = [
     stateMutability: 'payable',
     inputs: [{ name: 'confessionId', type: 'uint256', internalType: 'uint256' }],
     outputs: [],
+  },
+  {
+    name: 'realVotes',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+  },
+  {
+    name: 'fakeVotes',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+  },
+  {
+    name: 'hasVoted',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: '', type: 'uint256', internalType: 'uint256' },
+      { name: '', type: 'address', internalType: 'address' },
+    ],
+    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+  },
+  {
+    name: 'voteTruth',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'confessionId', type: 'uint256', internalType: 'uint256' },
+      { name: 'isReal', type: 'bool', internalType: 'bool' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'getTruthStats',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'confessionId', type: 'uint256', internalType: 'uint256' }],
+    outputs: [
+      { name: 'real', type: 'uint256', internalType: 'uint256' },
+      { name: 'fake', type: 'uint256', internalType: 'uint256' },
+    ],
   },
   {
     name: 'totalLikes',

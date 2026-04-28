@@ -4,8 +4,8 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useAccount, useReadContracts } from 'wagmi';
 import { supabase }   from '@/lib/supabase';
 import { ConfessionCard } from './ConfessionCard';
-import type { Confession, UserVoteMap, VoteType } from '@/types';
-import { PROFILE_CONTRACT_ABI, PROFILE_CONTRACT_ADDRESS } from '@/lib/config';
+import type { Confession } from '@/types';
+import { CONTRACT_ABI, CONTRACT_ADDRESS, PROFILE_CONTRACT_ABI, PROFILE_CONTRACT_ADDRESS } from '@/lib/config';
 
 type SortKey = 'newest' | 'most_liked' | 'most_disliked' | 'most_tipped';
 
@@ -20,6 +20,7 @@ const PAGE_SIZE = 30;
 
 /** Rows loaded for sorting/pagination; real total can be higher (see totalCount). */
 const FEED_FETCH_LIMIT = 2000;
+type TruthSnapshot = { real: number; fake: number; hasVoted: boolean };
 
 function sortConfessions(list: Confession[], key: SortKey): Confession[] {
   const copy = [...list];
@@ -133,7 +134,6 @@ export function ConfessionFeed() {
   const { address } = useAccount();
 
   const [confessions, setConfessions] = useState<Confession[]>([]);
-  const [userVotes,   setUserVotes]   = useState<UserVoteMap>({});
   const [isLoading,   setIsLoading]   = useState(true);
   const [error,       setError]       = useState('');
   const [sortKey,     setSortKey]     = useState<SortKey>('newest');
@@ -159,29 +159,10 @@ export function ConfessionFeed() {
     setTotalCount(countRes.count ?? null);
   }, []);
 
-  const fetchUserVotes = useCallback(async (wallet: string) => {
-    const { data } = await supabase
-      .from('votes')
-      .select('confession_id, vote')
-      .eq('wallet', wallet.toLowerCase());
-
-    if (!data) return;
-    const map: UserVoteMap = {};
-    for (const row of data as { confession_id: number; vote: VoteType }[]) {
-      map[row.confession_id] = row.vote;
-    }
-    setUserVotes(map);
-  }, []);
-
   useEffect(() => {
     setIsLoading(true);
     fetchConfessions().finally(() => setIsLoading(false));
   }, [fetchConfessions]);
-
-  useEffect(() => {
-    if (address) fetchUserVotes(address);
-    else setUserVotes({});
-  }, [address, fetchUserVotes]);
 
   useEffect(() => {
     const channel = supabase
@@ -206,10 +187,6 @@ export function ConfessionFeed() {
     setPage(1);
   };
 
-  const handleVoted = useCallback((confessionId: number, vote: VoteType) => {
-    setUserVotes((prev) => ({ ...prev, [confessionId]: vote }));
-  }, []);
-
   const sorted     = useMemo(() => sortConfessions(confessions, sortKey), [confessions, sortKey]);
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
   const paginated  = useMemo(
@@ -225,6 +202,63 @@ export function ConfessionFeed() {
     for (const c of paginated) uniq.add(c.wallet.toLowerCase());
     return Array.from(uniq);
   }, [paginated]);
+
+  const truthContracts = useMemo(() => {
+    return paginated.flatMap((c) => {
+      const confessionId = BigInt(c.id);
+      const statsCall = {
+        address: CONTRACT_ADDRESS,
+        abi: CONTRACT_ABI,
+        functionName: 'getTruthStats' as const,
+        args: [confessionId],
+      };
+
+      if (!address) return [statsCall];
+      return [
+        statsCall,
+        {
+          address: CONTRACT_ADDRESS,
+          abi: CONTRACT_ABI,
+          functionName: 'hasVoted' as const,
+          args: [confessionId, address],
+        },
+      ];
+    });
+  }, [paginated, address]);
+
+  const { data: truthReads } = useReadContracts({
+    allowFailure: true,
+    contracts: truthContracts,
+    query: { enabled: paginated.length > 0 },
+  });
+
+  const truthByConfessionId = useMemo(() => {
+    const map: Record<number, TruthSnapshot> = {};
+    if (!truthReads) return map;
+
+    for (let i = 0; i < paginated.length; i += 1) {
+      const confessionId = paginated[i].id;
+      const baseIdx = address ? i * 2 : i;
+      const statsRes = truthReads[baseIdx];
+      const votedRes = address ? truthReads[baseIdx + 1] : null;
+
+      let real = 0;
+      let fake = 0;
+      let hasVoted = false;
+
+      if (statsRes?.status === 'success') {
+        const stats = statsRes.result as [bigint, bigint];
+        real = Number(stats[0]);
+        fake = Number(stats[1]);
+      }
+      if (votedRes?.status === 'success') {
+        hasVoted = Boolean(votedRes.result as boolean);
+      }
+
+      map[confessionId] = { real, fake, hasVoted };
+    }
+    return map;
+  }, [truthReads, paginated, address]);
 
   const { data: profiles } = useReadContracts({
     allowFailure: true,
@@ -357,8 +391,9 @@ export function ConfessionFeed() {
         <ConfessionCard
           key={confession.id}
           confession={confession}
-          userVote={userVotes[confession.id]}
-          onVoted={handleVoted}
+          initialRealVotes={truthByConfessionId[confession.id]?.real ?? 0}
+          initialFakeVotes={truthByConfessionId[confession.id]?.fake ?? 0}
+          initialHasVoted={truthByConfessionId[confession.id]?.hasVoted ?? false}
           username={walletToUsername[confession.wallet.toLowerCase()] ?? null}
         />
       ))}
