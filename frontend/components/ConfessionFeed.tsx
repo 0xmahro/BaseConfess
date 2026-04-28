@@ -492,6 +492,7 @@ export function ConfessionFeed() {
           initialFakeVotes={truthByConfessionId[confession.id]?.fake ?? 0}
           initialHasVoted={truthByConfessionId[confession.id]?.hasVoted ?? false}
           likeDislikeContractAddress={truthByConfessionId[confession.id]?.likeDislikeContractAddress ?? null}
+          truthVotingAvailable={truthByConfessionId[confession.id]?.existsOnCurrentContract ?? false}
           username={walletToUsername[confession.wallet.toLowerCase()] ?? null}
         />
       ))}
