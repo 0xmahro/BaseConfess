@@ -15,6 +15,11 @@ node_modules/
 frontend/.next/
 frontend/out/
 frontend/build/
+frontend/tsconfig.tsbuildinfo
+
+# Local generated artifacts
+/out/
+/cache/
 
 # Backend build
 backend/dist/
