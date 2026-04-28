@@ -72,14 +72,18 @@ export function useTruthVoting({
       setRealVotes(initialRealVotes);
       setFakeVotes(initialFakeVotes);
       const message = err instanceof Error ? err.message : '';
+      const normalized = message.toLowerCase();
       const rejected =
-        message.toLowerCase().includes('user rejected') ||
-        message.toLowerCase().includes('denied');
+        normalized.includes('user rejected') ||
+        normalized.includes('denied');
       if (rejected) {
         setError('');
-      } else if (message.includes('Post at least 1 confession')) {
+      } else if (
+        normalized.includes('post at least 1 confession') ||
+        normalized.includes('post at least one confession')
+      ) {
         setError('Post at least one confession before voting.');
-      } else if (message.includes('Already voted')) {
+      } else if (normalized.includes('already voted')) {
         setError('You already voted on this confession.');
       } else {
         setError('Vote failed. Try again.');
