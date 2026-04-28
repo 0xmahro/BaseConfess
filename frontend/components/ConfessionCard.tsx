@@ -17,6 +17,7 @@ interface ConfessionCardProps {
   initialRealVotes: number;
   initialFakeVotes: number;
   initialHasVoted: boolean;
+  truthContractAddress: `0x${string}` | null;
   likeDislikeContractAddress: `0x${string}` | null;
   username?:  string | null;
 }
@@ -53,6 +54,7 @@ export function ConfessionCard({
   initialRealVotes,
   initialFakeVotes,
   initialHasVoted,
+  truthContractAddress,
   likeDislikeContractAddress,
   username,
 }: ConfessionCardProps) {
@@ -88,6 +90,7 @@ export function ConfessionCard({
     initialRealVotes,
     initialFakeVotes,
     initialHasVoted,
+    contractAddress: truthContractAddress,
   });
 
   const [expanded, setExpanded] = useState(false);
@@ -339,7 +342,7 @@ export function ConfessionCard({
             </button>
             <button
               onClick={() => handleTruthVote(true)}
-              disabled={!isConnected || !address || wrongChain || isVoting || hasVoted}
+              disabled={!isConnected || !address || wrongChain || isVoting || hasVoted || !truthContractAddress}
               className="flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-bold
                 border border-pink-200 text-mauve bg-white
                 hover:bg-pink-50 hover:border-pink-300
@@ -349,7 +352,7 @@ export function ConfessionCard({
             </button>
             <button
               onClick={() => handleTruthVote(false)}
-              disabled={!isConnected || !address || wrongChain || isVoting || hasVoted}
+              disabled={!isConnected || !address || wrongChain || isVoting || hasVoted || !truthContractAddress}
               className="flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-bold
                 border border-pink-200 text-mauve bg-white
                 hover:bg-pink-50 hover:border-pink-300

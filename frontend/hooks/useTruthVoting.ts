@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { CONTRACT_ABI, CONTRACT_ADDRESS } from '@/lib/config';
+import { CONTRACT_ABI } from '@/lib/config';
 
 type UseTruthVotingParams = {
   confessionId: number;
   initialRealVotes: number;
   initialFakeVotes: number;
   initialHasVoted: boolean;
+  contractAddress: `0x${string}` | null;
 };
 
 export function useTruthVoting({
@@ -16,6 +17,7 @@ export function useTruthVoting({
   initialRealVotes,
   initialFakeVotes,
   initialHasVoted,
+  contractAddress,
 }: UseTruthVotingParams) {
   const [realVotes, setRealVotes] = useState(initialRealVotes);
   const [fakeVotes, setFakeVotes] = useState(initialFakeVotes);
@@ -81,6 +83,10 @@ export function useTruthVoting({
   const submitVote = async (isReal: boolean) => {
     if (hasVoted || txHash) return;
     setError('');
+    if (!contractAddress) {
+      setError('Truth voting is unavailable for this confession.');
+      return;
+    }
 
     // Optimistic UI: immediately lock choices and update counters.
     setHasVoted(true);
@@ -89,7 +95,7 @@ export function useTruthVoting({
 
     try {
       const hash = await writeContractAsync({
-        address: CONTRACT_ADDRESS,
+        address: contractAddress,
         abi: CONTRACT_ABI,
         functionName: 'voteTruth',
         args: [BigInt(confessionId), isReal],

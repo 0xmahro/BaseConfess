@@ -10,6 +10,7 @@ import {
   CONTRACT_ADDRESS,
   LEGACY_CONTRACT_ADDRESS,
   LEGACY_CONTRACT_ADDRESS_2,
+  TRUTH_CONTRACT_FALLBACK_ADDRESS,
   PROFILE_CONTRACT_ABI,
   PROFILE_CONTRACT_ADDRESS,
 } from '@/lib/config';
@@ -31,8 +32,7 @@ type TruthSnapshot = {
   real: number;
   fake: number;
   hasVoted: boolean;
-  existsOnCurrentContract: boolean;
-  existsOnLegacyContract: boolean;
+  truthContractAddress: `0x${string}` | null;
   likeDislikeContractAddress: `0x${string}` | null;
 };
 
@@ -250,6 +250,12 @@ export function ConfessionFeed() {
         functionName: 'confessionOwner' as const,
         args: [confessionId],
       };
+      const truthFallbackOwnerCall = {
+        address: TRUTH_CONTRACT_FALLBACK_ADDRESS,
+        abi: CONTRACT_ABI,
+        functionName: 'confessionOwner' as const,
+        args: [confessionId],
+      };
       const legacyOwnerCall = {
         address: LEGACY_CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
@@ -268,15 +274,38 @@ export function ConfessionFeed() {
         functionName: 'getTruthStats' as const,
         args: [confessionId],
       };
+      const truthFallbackStatsCall = {
+        address: TRUTH_CONTRACT_FALLBACK_ADDRESS,
+        abi: CONTRACT_ABI,
+        functionName: 'getTruthStats' as const,
+        args: [confessionId],
+      };
 
-      if (!address) return [ownerCall, legacyOwnerCall, legacyOwnerCall2, statsCall];
+      if (!address) {
+        return [
+          ownerCall,
+          truthFallbackOwnerCall,
+          legacyOwnerCall,
+          legacyOwnerCall2,
+          statsCall,
+          truthFallbackStatsCall,
+        ];
+      }
       return [
         ownerCall,
+        truthFallbackOwnerCall,
         legacyOwnerCall,
         legacyOwnerCall2,
         statsCall,
+        truthFallbackStatsCall,
         {
           address: CONTRACT_ADDRESS,
+          abi: CONTRACT_ABI,
+          functionName: 'hasVoted' as const,
+          args: [confessionId, address],
+        },
+        {
+          address: TRUTH_CONTRACT_FALLBACK_ADDRESS,
           abi: CONTRACT_ABI,
           functionName: 'hasVoted' as const,
           args: [confessionId, address],
@@ -298,24 +327,33 @@ export function ConfessionFeed() {
 
     for (let i = 0; i < paginated.length; i += 1) {
       const confessionId = paginated[i].id;
-      const baseIdx = address ? i * 5 : i * 4;
+      const baseIdx = address ? i * 8 : i * 6;
       const ownerRes = truthReads[baseIdx];
-      const legacyOwnerRes = truthReads[baseIdx + 1];
-      const legacyOwnerRes2 = truthReads[baseIdx + 2];
-      const statsRes = truthReads[baseIdx + 3];
-      const votedRes = address ? truthReads[baseIdx + 4] : null;
+      const truthFallbackOwnerRes = truthReads[baseIdx + 1];
+      const legacyOwnerRes = truthReads[baseIdx + 2];
+      const legacyOwnerRes2 = truthReads[baseIdx + 3];
+      const statsRes = truthReads[baseIdx + 4];
+      const truthFallbackStatsRes = truthReads[baseIdx + 5];
+      const votedRes = address ? truthReads[baseIdx + 6] : null;
+      const truthFallbackVotedRes = address ? truthReads[baseIdx + 7] : null;
 
       let real = 0;
       let fake = 0;
       let hasVoted = false;
       let existsOnCurrentContract = false;
+      let existsOnTruthFallback = false;
       let existsOnLegacyContract = false;
       let existsOnLegacyContract2 = false;
       let likeDislikeContractAddress: `0x${string}` | null = null;
+      let truthContractAddress: `0x${string}` | null = null;
 
       if (ownerRes?.status === 'success') {
         const owner = String(ownerRes.result ?? '').toLowerCase();
         existsOnCurrentContract = owner !== '0x0000000000000000000000000000000000000000';
+      }
+      if (truthFallbackOwnerRes?.status === 'success') {
+        const fallbackOwner = String(truthFallbackOwnerRes.result ?? '').toLowerCase();
+        existsOnTruthFallback = fallbackOwner !== '0x0000000000000000000000000000000000000000';
       }
       if (legacyOwnerRes?.status === 'success') {
         const legacyOwner = String(legacyOwnerRes.result ?? '').toLowerCase();
@@ -328,27 +366,41 @@ export function ConfessionFeed() {
 
       if (existsOnCurrentContract) {
         likeDislikeContractAddress = CONTRACT_ADDRESS;
+        truthContractAddress = CONTRACT_ADDRESS;
+      } else if (existsOnTruthFallback) {
+        likeDislikeContractAddress = TRUTH_CONTRACT_FALLBACK_ADDRESS;
+        truthContractAddress = TRUTH_CONTRACT_FALLBACK_ADDRESS;
       } else if (existsOnLegacyContract) {
         likeDislikeContractAddress = LEGACY_CONTRACT_ADDRESS;
       } else if (existsOnLegacyContract2) {
         likeDislikeContractAddress = LEGACY_CONTRACT_ADDRESS_2;
       }
 
-      if (statsRes?.status === 'success') {
-        const stats = statsRes.result as [bigint, bigint];
-        real = Number(stats[0]);
-        fake = Number(stats[1]);
-      }
-      if (votedRes?.status === 'success') {
-        hasVoted = Boolean(votedRes.result as boolean);
+      if (truthContractAddress === CONTRACT_ADDRESS) {
+        if (statsRes?.status === 'success') {
+          const stats = statsRes.result as [bigint, bigint];
+          real = Number(stats[0]);
+          fake = Number(stats[1]);
+        }
+        if (votedRes?.status === 'success') {
+          hasVoted = Boolean(votedRes.result as boolean);
+        }
+      } else if (truthContractAddress === TRUTH_CONTRACT_FALLBACK_ADDRESS) {
+        if (truthFallbackStatsRes?.status === 'success') {
+          const stats = truthFallbackStatsRes.result as [bigint, bigint];
+          real = Number(stats[0]);
+          fake = Number(stats[1]);
+        }
+        if (truthFallbackVotedRes?.status === 'success') {
+          hasVoted = Boolean(truthFallbackVotedRes.result as boolean);
+        }
       }
 
       map[confessionId] = {
         real,
         fake,
         hasVoted,
-        existsOnCurrentContract,
-        existsOnLegacyContract: existsOnLegacyContract || existsOnLegacyContract2,
+        truthContractAddress,
         likeDislikeContractAddress,
       };
     }
@@ -491,6 +543,7 @@ export function ConfessionFeed() {
           initialRealVotes={truthByConfessionId[confession.id]?.real ?? 0}
           initialFakeVotes={truthByConfessionId[confession.id]?.fake ?? 0}
           initialHasVoted={truthByConfessionId[confession.id]?.hasVoted ?? false}
+          truthContractAddress={truthByConfessionId[confession.id]?.truthContractAddress ?? null}
           likeDislikeContractAddress={truthByConfessionId[confession.id]?.likeDislikeContractAddress ?? null}
           username={walletToUsername[confession.wallet.toLowerCase()] ?? null}
         />
