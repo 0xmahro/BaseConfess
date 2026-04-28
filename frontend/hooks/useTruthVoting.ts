@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useAccount, usePublicClient, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { base } from 'wagmi/chains';
 import { CONTRACT_ABI, CONTRACT_ADDRESS } from '@/lib/config';
 
 type UseTruthVotingParams = {
@@ -17,6 +18,8 @@ export function useTruthVoting({
   initialFakeVotes,
   initialHasVoted,
 }: UseTruthVotingParams) {
+  const { address } = useAccount();
+  const publicClient = usePublicClient({ chainId: base.id });
   const [realVotes, setRealVotes] = useState(initialRealVotes);
   const [fakeVotes, setFakeVotes] = useState(initialFakeVotes);
   const [hasVoted, setHasVoted] = useState(initialHasVoted);
@@ -51,12 +54,47 @@ export function useTruthVoting({
     if (hasVoted || txHash) return;
     setError('');
 
-    // Optimistic UI: immediately lock choices and update counters.
-    setHasVoted(true);
-    if (isReal) setRealVotes((v) => v + 1);
-    else setFakeVotes((v) => v + 1);
-
     try {
+      if (!address || !publicClient) {
+        setError('Wallet baglantisini yenileyip tekrar dene.');
+        return;
+      }
+
+      const owner = (await publicClient.readContract({
+        address: CONTRACT_ADDRESS,
+        abi: CONTRACT_ABI,
+        functionName: 'confessionOwner',
+        args: [BigInt(confessionId)],
+      })) as `0x${string}`;
+      if (!owner || owner.toLowerCase() === '0x0000000000000000000000000000000000000000') {
+        setError('Truth vote bu itirafta kullanilamiyor.');
+        return;
+      }
+
+      const confessionCount = (await publicClient.readContract({
+        address: CONTRACT_ADDRESS,
+        abi: CONTRACT_ABI,
+        functionName: 'confessionCount',
+        args: [address],
+      })) as bigint;
+      if (confessionCount === BigInt(0)) {
+        setError('Truth vote icin yeni kontratta en az 1 itiraf atmalisin.');
+        return;
+      }
+
+      await publicClient.simulateContract({
+        account: address,
+        address: CONTRACT_ADDRESS,
+        abi: CONTRACT_ABI,
+        functionName: 'voteTruth',
+        args: [BigInt(confessionId), isReal],
+      });
+
+      // Optimistic UI: lock choices and update counters only after prechecks.
+      setHasVoted(true);
+      if (isReal) setRealVotes((v) => v + 1);
+      else setFakeVotes((v) => v + 1);
+
       const hash = await writeContractAsync({
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
@@ -83,6 +121,8 @@ export function useTruthVoting({
         setError('Post at least one confession before voting.');
       } else if (normalized.includes('already voted')) {
         setError('You already voted on this confession.');
+      } else if (normalized.includes('confession not found')) {
+        setError('Truth vote bu itirafta kullanilamiyor.');
       } else {
         setError('Vote failed. Try again.');
       }
