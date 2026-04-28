@@ -140,6 +140,7 @@ function formatFeeDisplay(wei: bigint): string {
 
 type RecentLoveTest = {
   tx_hash: string;
+  wallet: string;
   name_a: string | null;
   name_b: string | null;
   percent: number;
@@ -152,6 +153,11 @@ function timeAgoShort(timestamp: string): string {
   if (sec < 3600) return `${Math.floor(sec / 60)}m`;
   if (sec < 86400) return `${Math.floor(sec / 3600)}h`;
   return `${Math.floor(sec / 86400)}d`;
+}
+
+function shortWallet(wallet: string): string {
+  if (!wallet) return 'unknown';
+  return `${wallet.slice(0, 6)}...${wallet.slice(-4)}`;
 }
 
 function LoveMeterStatsStrip({
@@ -495,7 +501,7 @@ export default function AskTestPage() {
     (async () => {
       const { data } = await supabase
         .from('love_meter_tests')
-        .select('tx_hash,name_a,name_b,percent,created_at')
+        .select('tx_hash,wallet,name_a,name_b,percent,created_at')
         .order('created_at', { ascending: false })
         .limit(8);
       if (cancelled) return;
@@ -805,8 +811,13 @@ export default function AskTestPage() {
                     >
                       <div className="min-w-0">
                         <p className="text-sm font-extrabold text-ink truncate">
-                          {(row.name_a || 'You')} <span className="text-violet-400">&</span>{' '}
-                          {(row.name_b || 'Partner')}
+                          {row.name_a && row.name_b ? (
+                            <>
+                              {row.name_a} <span className="text-violet-400">&</span> {row.name_b}
+                            </>
+                          ) : (
+                            <>Anonymous pair · <span className="font-mono">{shortWallet(row.wallet)}</span></>
+                          )}
                         </p>
                         <p className="text-[10px] font-bold text-indigo-400">
                           {timeAgoShort(row.created_at)} ago
