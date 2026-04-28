@@ -7,7 +7,6 @@ import { TipModal } from './TipModal';
 import type { Confession, VoteType } from '@/types';
 import Link from 'next/link';
 import { useTruthVoting } from '@/hooks/useTruthVoting';
-import { builderCodeTxOpts } from '@/lib/builderCode';
 import { CONTRACT_ABI, CONTRACT_ADDRESS } from '@/lib/config';
 import { supabase } from '@/lib/supabase';
 
@@ -150,7 +149,6 @@ export function ConfessionCard({
         abi: CONTRACT_ABI,
         functionName: 'vote',
         args: [BigInt(confession.id), voteType],
-        ...builderCodeTxOpts(),
       });
       pendingVoteRef.current = voteType;
       setVoteTxHash(hash);
@@ -291,7 +289,7 @@ export function ConfessionCard({
               onClick={() => handleLegacyVote(1)}
               disabled={!isConnected || !!voteTxHash}
               className={`
-                flex items-center justify-center gap-1.5 h-10 rounded-full text-xs font-bold
+                flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-bold
                 border bg-white transition-all duration-150 active:scale-95
                 disabled:opacity-30 disabled:cursor-not-allowed ${likePopped ? 'animate-heart-pop' : ''}
                 ${localUserVote === 1
@@ -301,15 +299,15 @@ export function ConfessionCard({
               `}
             >
               <span className="inline-flex items-center gap-1.5">
-                <span>🤍</span>
-                <span>{localLikes}</span>
+                  <span>🤍</span>
+                  <span>{localLikes}</span>
               </span>
             </button>
             <button
               onClick={() => handleLegacyVote(-1)}
               disabled={!isConnected || !!voteTxHash}
               className={`
-                flex items-center justify-center gap-1.5 h-10 rounded-full text-xs font-bold
+                flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-bold
                 border bg-white transition-all duration-150 active:scale-95
                 disabled:opacity-30 disabled:cursor-not-allowed
                 ${localUserVote === -1
@@ -326,7 +324,7 @@ export function ConfessionCard({
             <button
               onClick={() => handleTruthVote(true)}
               disabled={!isConnected || !address || wrongChain || isVoting || hasVoted || truthVoteBlocked}
-              className="flex items-center justify-center gap-1.5 h-10 rounded-full text-xs font-bold
+              className="flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-bold
                 border border-pink-200 text-mauve bg-white
                 hover:bg-pink-50 hover:border-pink-300
                 transition-all duration-150 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
@@ -336,7 +334,7 @@ export function ConfessionCard({
             <button
               onClick={() => handleTruthVote(false)}
               disabled={!isConnected || !address || wrongChain || isVoting || hasVoted || truthVoteBlocked}
-              className="flex items-center justify-center gap-1.5 h-10 rounded-full text-xs font-bold
+              className="flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-bold
                 border border-pink-200 text-mauve bg-white
                 hover:bg-pink-50 hover:border-pink-300
                 transition-all duration-150 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"

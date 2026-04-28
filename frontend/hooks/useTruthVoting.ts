@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { builderCodeTxOpts } from '@/lib/builderCode';
 import { CONTRACT_ABI, CONTRACT_ADDRESS } from '@/lib/config';
 
 type UseTruthVotingParams = {
@@ -63,7 +62,6 @@ export function useTruthVoting({
         abi: CONTRACT_ABI,
         functionName: 'voteTruth',
         args: [BigInt(confessionId), isReal],
-        ...builderCodeTxOpts(),
       });
       setTxHash(hash);
     } catch (err: unknown) {
