@@ -35,6 +35,12 @@ export default function Home() {
           </Link>
         </div>
 
+        <div className="flex items-center gap-3 px-1" aria-hidden>
+          <div className="flex-1 h-px bg-pink-200" />
+          <span className="text-[10px] font-extrabold uppercase tracking-widest text-pink-300">menu</span>
+          <div className="flex-1 h-px bg-pink-200" />
+        </div>
+
         {/* Screen switcher */}
         <div
           className="p-2 rounded-3xl bg-white border border-pink-200 shadow-card space-y-1.5"
@@ -121,6 +127,12 @@ export default function Home() {
             Profiles
           </Link>
           </div>
+        </div>
+
+        <div className="flex items-center gap-3 px-1" aria-hidden>
+          <div className="flex-1 h-px bg-pink-200" />
+          <span className="text-[10px] font-extrabold uppercase tracking-widest text-pink-300">feed</span>
+          <div className="flex-1 h-px bg-pink-200" />
         </div>
 
         {tab === 'confess' && (
