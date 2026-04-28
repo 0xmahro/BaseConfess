@@ -21,13 +21,14 @@ export default function Home() {
     <div className="min-h-screen bg-pink-50">
       <Header />
 
-      <main className="max-w-2xl mx-auto px-4 py-8 space-y-7">
+      <main className="max-w-2xl mx-auto px-4 py-6 sm:py-8 space-y-6 sm:space-y-7">
         <div className="flex flex-wrap justify-center gap-3">
           <Link
             href="/profile"
             className="inline-flex items-center justify-center gap-2 py-2.5 px-6 rounded-2xl text-sm font-extrabold
               border border-pink-300 bg-gradient-to-r from-white to-pink-50 text-pink-600 shadow-sm
-              hover:from-pink-50 hover:to-pink-100 hover:border-pink-400 hover:shadow-card transition-all duration-200 active:scale-[0.98]"
+              hover:from-pink-50 hover:to-pink-100 hover:border-pink-400 hover:shadow-card transition-all duration-200 active:scale-[0.98]
+              w-full sm:w-auto"
           >
             <span className="text-base leading-none" aria-hidden>👤</span>
             Create Profile
@@ -36,10 +37,11 @@ export default function Home() {
 
         {/* Screen switcher */}
         <div
-          className="grid grid-cols-3 md:grid-cols-5 p-2 rounded-3xl bg-white border border-pink-200 shadow-card gap-1.5"
+          className="p-2 rounded-3xl bg-white border border-pink-200 shadow-card space-y-1.5"
           role="tablist"
           aria-label="Choose Confess, Wish Box, Love Meter, Top Souls, or Profiles"
         >
+          <div className="grid grid-cols-3 gap-1.5">
           <button
             type="button"
             role="tab"
@@ -91,6 +93,9 @@ export default function Home() {
             <span className="text-base leading-none">💗</span>
             Love Meter
           </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1.5">
           <Link
             href="/top"
             role="tab"
@@ -115,6 +120,7 @@ export default function Home() {
             <span className="text-base leading-none">👥</span>
             Profiles
           </Link>
+          </div>
         </div>
 
         {tab === 'confess' && (
