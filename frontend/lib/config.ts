@@ -12,6 +12,9 @@ export const CONTRACT_ADDRESS =
 export const LEGACY_CONTRACT_ADDRESS =
   (process.env.NEXT_PUBLIC_LEGACY_CONFESSIONS_ADDRESS ??
     '0xeaa890e6c93264B498773425b6f8f02726c143F4') as `0x${string}`;
+export const LEGACY_CONTRACT_ADDRESS_2 =
+  (process.env.NEXT_PUBLIC_LEGACY_CONFESSIONS_ADDRESS_2 ??
+    '0xD11cB9c3F69650293370Ea38eb688010E0DDCe8d') as `0x${string}`;
 
 export const CONFESSION_FEE = '0.000025'; // ETH — must match confessionFee in contract
 

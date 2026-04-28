@@ -5,7 +5,14 @@ import { useAccount, useReadContracts } from 'wagmi';
 import { supabase }   from '@/lib/supabase';
 import { ConfessionCard } from './ConfessionCard';
 import type { Confession, UserVoteMap, VoteType } from '@/types';
-import { CONTRACT_ABI, CONTRACT_ADDRESS, LEGACY_CONTRACT_ADDRESS, PROFILE_CONTRACT_ABI, PROFILE_CONTRACT_ADDRESS } from '@/lib/config';
+import {
+  CONTRACT_ABI,
+  CONTRACT_ADDRESS,
+  LEGACY_CONTRACT_ADDRESS,
+  LEGACY_CONTRACT_ADDRESS_2,
+  PROFILE_CONTRACT_ABI,
+  PROFILE_CONTRACT_ADDRESS,
+} from '@/lib/config';
 
 type SortKey = 'newest' | 'most_liked' | 'most_disliked' | 'most_tipped';
 
@@ -26,6 +33,7 @@ type TruthSnapshot = {
   hasVoted: boolean;
   existsOnCurrentContract: boolean;
   existsOnLegacyContract: boolean;
+  likeDislikeContractAddress: `0x${string}` | null;
 };
 
 function sortConfessions(list: Confession[], key: SortKey): Confession[] {
@@ -248,6 +256,12 @@ export function ConfessionFeed() {
         functionName: 'confessionOwner' as const,
         args: [confessionId],
       };
+      const legacyOwnerCall2 = {
+        address: LEGACY_CONTRACT_ADDRESS_2,
+        abi: CONTRACT_ABI,
+        functionName: 'confessionOwner' as const,
+        args: [confessionId],
+      };
       const statsCall = {
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
@@ -255,10 +269,11 @@ export function ConfessionFeed() {
         args: [confessionId],
       };
 
-      if (!address) return [ownerCall, legacyOwnerCall, statsCall];
+      if (!address) return [ownerCall, legacyOwnerCall, legacyOwnerCall2, statsCall];
       return [
         ownerCall,
         legacyOwnerCall,
+        legacyOwnerCall2,
         statsCall,
         {
           address: CONTRACT_ADDRESS,
@@ -301,17 +316,20 @@ export function ConfessionFeed() {
 
     for (let i = 0; i < paginated.length; i += 1) {
       const confessionId = paginated[i].id;
-      const baseIdx = address ? i * 4 : i * 3;
+      const baseIdx = address ? i * 5 : i * 4;
       const ownerRes = truthReads[baseIdx];
       const legacyOwnerRes = truthReads[baseIdx + 1];
-      const statsRes = truthReads[baseIdx + 2];
-      const votedRes = address ? truthReads[baseIdx + 3] : null;
+      const legacyOwnerRes2 = truthReads[baseIdx + 2];
+      const statsRes = truthReads[baseIdx + 3];
+      const votedRes = address ? truthReads[baseIdx + 4] : null;
 
       let real = 0;
       let fake = 0;
       let hasVoted = false;
       let existsOnCurrentContract = false;
       let existsOnLegacyContract = false;
+      let existsOnLegacyContract2 = false;
+      let likeDislikeContractAddress: `0x${string}` | null = null;
 
       if (ownerRes?.status === 'success') {
         const owner = String(ownerRes.result ?? '').toLowerCase();
@@ -320,6 +338,18 @@ export function ConfessionFeed() {
       if (legacyOwnerRes?.status === 'success') {
         const legacyOwner = String(legacyOwnerRes.result ?? '').toLowerCase();
         existsOnLegacyContract = legacyOwner !== '0x0000000000000000000000000000000000000000';
+      }
+      if (legacyOwnerRes2?.status === 'success') {
+        const legacyOwner2 = String(legacyOwnerRes2.result ?? '').toLowerCase();
+        existsOnLegacyContract2 = legacyOwner2 !== '0x0000000000000000000000000000000000000000';
+      }
+
+      if (existsOnCurrentContract) {
+        likeDislikeContractAddress = CONTRACT_ADDRESS;
+      } else if (existsOnLegacyContract) {
+        likeDislikeContractAddress = LEGACY_CONTRACT_ADDRESS;
+      } else if (existsOnLegacyContract2) {
+        likeDislikeContractAddress = LEGACY_CONTRACT_ADDRESS_2;
       }
 
       if (statsRes?.status === 'success') {
@@ -336,7 +366,8 @@ export function ConfessionFeed() {
         fake,
         hasVoted,
         existsOnCurrentContract,
-        existsOnLegacyContract,
+        existsOnLegacyContract: existsOnLegacyContract || existsOnLegacyContract2,
+        likeDislikeContractAddress,
       };
     }
     return map;
@@ -481,6 +512,7 @@ export function ConfessionFeed() {
           canTruthVote={canTruthVote}
           existsOnCurrentContract={truthByConfessionId[confession.id]?.existsOnCurrentContract ?? false}
           existsOnLegacyContract={truthByConfessionId[confession.id]?.existsOnLegacyContract ?? false}
+          likeDislikeContractAddress={truthByConfessionId[confession.id]?.likeDislikeContractAddress ?? null}
           username={walletToUsername[confession.wallet.toLowerCase()] ?? null}
         />
       ))}

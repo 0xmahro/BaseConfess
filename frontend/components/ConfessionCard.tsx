@@ -7,7 +7,7 @@ import { TipModal } from './TipModal';
 import type { Confession, VoteType } from '@/types';
 import Link from 'next/link';
 import { useTruthVoting } from '@/hooks/useTruthVoting';
-import { CONTRACT_ABI, CONTRACT_ADDRESS, LEGACY_CONTRACT_ADDRESS } from '@/lib/config';
+import { CONTRACT_ABI } from '@/lib/config';
 import { supabase } from '@/lib/supabase';
 
 interface ConfessionCardProps {
@@ -20,6 +20,7 @@ interface ConfessionCardProps {
   canTruthVote: boolean;
   existsOnCurrentContract: boolean;
   existsOnLegacyContract: boolean;
+  likeDislikeContractAddress: `0x${string}` | null;
   username?:  string | null;
 }
 
@@ -58,6 +59,7 @@ export function ConfessionCard({
   canTruthVote,
   existsOnCurrentContract,
   existsOnLegacyContract,
+  likeDislikeContractAddress,
   username,
 }: ConfessionCardProps) {
   const { address, isConnected } = useAccount();
@@ -108,7 +110,7 @@ export function ConfessionCard({
   const avatarGradient = walletColor(confession.wallet);
   const truthVoteBlocked = !hasVoted && !canTruthVote;
   const legacyConfession = !existsOnCurrentContract;
-  const canUseLikeDislike = existsOnCurrentContract || existsOnLegacyContract;
+  const canUseLikeDislike = Boolean(likeDislikeContractAddress);
   const hasGasForTx = (nativeBalance?.value ?? BigInt(0)) > BigInt(0);
 
   useEffect(() => {
@@ -154,9 +156,11 @@ export function ConfessionCard({
     setLocalUserVote(voteType);
 
     try {
-      const voteContractAddress = existsOnCurrentContract
-        ? CONTRACT_ADDRESS
-        : LEGACY_CONTRACT_ADDRESS;
+      const voteContractAddress = likeDislikeContractAddress;
+      if (!voteContractAddress) {
+        setLegacyVoteError('Bu itiraf icin oy kontrati bulunamadi.');
+        return;
+      }
       const hash = await writeContractAsync({
         address: voteContractAddress,
         abi: CONTRACT_ABI,
@@ -417,7 +421,7 @@ export function ConfessionCard({
           )}
           {truthVoteBlocked && isConnected && (
             <p className="text-[11px] font-semibold text-amber-600">
-              Truth vote icin once en az 1 itiraf paylasmalisin.
+              Truth vote icin yeni kontratta en az 1 itiraf paylasmalisin.
             </p>
           )}
 
