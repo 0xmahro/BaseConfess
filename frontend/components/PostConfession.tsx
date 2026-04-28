@@ -104,7 +104,7 @@ export function PostConfession() {
     : null;
 
   return (
-    <div className="bg-white rounded-3xl border border-pink-200 shadow-card p-5 space-y-4">
+    <div className="bg-white rounded-3xl border border-pink-200 shadow-[0_16px_56px_rgba(236,72,153,0.12)] p-5 space-y-4">
 
       {/* Title row */}
       <div className="flex items-center gap-2">
@@ -133,7 +133,7 @@ export function PostConfession() {
           maxLength={MAX_CHARS}
           className={`
             w-full resize-none rounded-2xl border px-4 py-3 pb-7
-            text-sm text-ink placeholder-pink-400 font-semibold
+            text-sm text-ink placeholder-pink-500/70 font-semibold
             bg-pink-50 outline-none transition-all duration-200
             focus:border-pink-400 focus:ring-2 focus:ring-pink-100
             disabled:opacity-50 disabled:cursor-not-allowed
@@ -185,7 +185,7 @@ export function PostConfession() {
           transition-all duration-200 flex items-center justify-center gap-2
           ${canSubmit && !isProcessing
             ? 'bg-gradient-to-r from-pink-500 to-pink-400 text-white shadow-pink hover:from-pink-600 hover:to-pink-500 active:scale-[0.98]'
-            : 'bg-pink-100 text-pink-300 cursor-not-allowed'
+            : 'bg-pink-200/80 text-pink-500/70 cursor-not-allowed'
           }
         `}
       >
