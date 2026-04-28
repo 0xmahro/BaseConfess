@@ -25,7 +25,11 @@ export function useTruthVoting({
   const [showSuccessToast, setShowSuccessToast] = useState(false);
 
   const { writeContractAsync } = useWriteContract();
-  const { isSuccess: txConfirmed } = useWaitForTransactionReceipt({ hash: txHash });
+  const {
+    isSuccess: txConfirmed,
+    isError: txReceiptFailed,
+    error: txReceiptError,
+  } = useWaitForTransactionReceipt({ hash: txHash });
 
   useEffect(() => {
     setRealVotes(initialRealVotes);
@@ -46,6 +50,33 @@ export function useTruthVoting({
     const timer = setTimeout(() => setShowSuccessToast(false), 1800);
     return () => clearTimeout(timer);
   }, [txConfirmed]);
+
+  useEffect(() => {
+    if (!txReceiptFailed) return;
+    setTxHash(undefined);
+    setHasVoted(initialHasVoted);
+    setRealVotes(initialRealVotes);
+    setFakeVotes(initialFakeVotes);
+    const message =
+      txReceiptError instanceof Error ? txReceiptError.message.toLowerCase() : '';
+    if (message.includes('reverted')) {
+      setError('Islem zincirde basarisiz oldu (revert).');
+    } else {
+      setError('Islem dogrulanamadi. Tekrar dene.');
+    }
+  }, [txReceiptFailed, txReceiptError, initialHasVoted, initialRealVotes, initialFakeVotes]);
+
+  useEffect(() => {
+    if (!txHash) return;
+    const timer = setTimeout(() => {
+      setTxHash(undefined);
+      setHasVoted(initialHasVoted);
+      setRealVotes(initialRealVotes);
+      setFakeVotes(initialFakeVotes);
+      setError('Islem uzun surdu. Durumu cuzdandan kontrol edip tekrar dene.');
+    }, 90000);
+    return () => clearTimeout(timer);
+  }, [txHash, initialHasVoted, initialRealVotes, initialFakeVotes]);
 
   const submitVote = async (isReal: boolean) => {
     if (hasVoted || txHash) return;
