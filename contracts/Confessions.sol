@@ -144,7 +144,6 @@ contract Confessions {
     function voteTruth(uint256 confessionId, bool isReal) external {
         require(confessionOwner[confessionId] != address(0), "Confession not found");
         require(!hasVoted[confessionId][msg.sender], "Already voted");
-        require(confessionCount[msg.sender] > 0, "Post at least 1 confession");
 
         hasVoted[confessionId][msg.sender] = true;
 
