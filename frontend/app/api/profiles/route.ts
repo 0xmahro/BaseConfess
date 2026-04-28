@@ -45,6 +45,13 @@ export async function GET() {
       new Set(((confessionRows as { wallet: string }[] | null) ?? []).map((r) => r.wallet?.toLowerCase()).filter(Boolean))
     ) as string[];
 
+    const confessionCountByWallet = new Map<string, number>();
+    for (const row of (confessionRows as { wallet: string }[] | null) ?? []) {
+      const w = row.wallet?.toLowerCase();
+      if (!w) continue;
+      confessionCountByWallet.set(w, (confessionCountByWallet.get(w) ?? 0) + 1);
+    }
+
     if (uniqueWallets.length === 0) {
       return NextResponse.json({ ok: true, profiles: [] as ProfileRow[] });
     }
@@ -91,7 +98,8 @@ export async function GET() {
           username,
           tags: (val?.[3] ?? []).filter(Boolean),
           activityScore: Number(val?.[4] ?? BigInt(0)),
-          confessionCount: Number(val?.[7] ?? BigInt(0)),
+          confessionCount:
+            confessionCountByWallet.get(wallet) ?? Number(val?.[7] ?? BigInt(0)),
         });
       });
     }
