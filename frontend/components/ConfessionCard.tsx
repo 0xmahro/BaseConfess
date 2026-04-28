@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useAccount, useBalance, useChainId, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
+import { useAccount, useChainId, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
 import { base } from 'wagmi/chains';
 import { TipModal } from './TipModal';
 import type { Confession, VoteType } from '@/types';
@@ -65,11 +65,6 @@ export function ConfessionCard({
   const { address, isConnected } = useAccount();
   const chainId    = useChainId();
   const wrongChain = isConnected && chainId !== base.id;
-  const { data: nativeBalance } = useBalance({
-    address,
-    chainId: base.id,
-    query: { enabled: Boolean(address) && isConnected },
-  });
 
   const [showTipModal,  setShowTipModal]  = useState(false);
   const [localLikes,    setLocalLikes]    = useState(confession.likes);
@@ -111,7 +106,6 @@ export function ConfessionCard({
   const truthVoteBlocked = !hasVoted && !canTruthVote;
   const legacyConfession = !existsOnCurrentContract;
   const canUseLikeDislike = Boolean(likeDislikeContractAddress);
-  const hasGasForTx = (nativeBalance?.value ?? BigInt(0)) > BigInt(0);
 
   useEffect(() => {
     setLocalLikes(confession.likes);
@@ -130,10 +124,6 @@ export function ConfessionCard({
     }
     if (wrongChain) {
       setLegacyVoteError('Switch to Base');
-      return;
-    }
-    if (!hasGasForTx) {
-      setLegacyVoteError('Base aginda gas icin ETH yok. Biraz Base ETH gonder.');
       return;
     }
     setLegacyVoteError('');
@@ -202,10 +192,6 @@ export function ConfessionCard({
     }
     if (wrongChain) {
       setTruthLocalError('Switch to Base Mainnet to vote.');
-      return;
-    }
-    if (!hasGasForTx) {
-      setTruthLocalError('Base aginda gas icin ETH yok. Biraz Base ETH gonder.');
       return;
     }
     setTruthLocalError('');
@@ -419,7 +405,7 @@ export function ConfessionCard({
               Bu kart eski kontrat kaydi. Like/Dislike aktif, Truth vote sadece yeni kontratta acik.
             </p>
           )}
-          {truthVoteBlocked && isConnected && (
+          {truthVoteBlocked && isConnected && !legacyConfession && (
             <p className="text-[11px] font-semibold text-amber-600">
               Truth vote icin yeni kontratta en az 1 itiraf paylasmalisin.
             </p>
