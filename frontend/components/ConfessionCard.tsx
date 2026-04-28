@@ -18,7 +18,6 @@ interface ConfessionCardProps {
   initialFakeVotes: number;
   initialHasVoted: boolean;
   likeDislikeContractAddress: `0x${string}` | null;
-  truthVotingAvailable: boolean;
   username?:  string | null;
 }
 
@@ -55,7 +54,6 @@ export function ConfessionCard({
   initialFakeVotes,
   initialHasVoted,
   likeDislikeContractAddress,
-  truthVotingAvailable,
   username,
 }: ConfessionCardProps) {
   const { address, isConnected } = useAccount();
@@ -200,10 +198,6 @@ export function ConfessionCard({
 
   const handleTruthVote = (isReal: boolean) => {
     if (!isConnected || !address) return;
-    if (!truthVotingAvailable) {
-      setTruthLocalError('Truth vote sadece yeni kontrat itiraflarinda acik.');
-      return;
-    }
     if (wrongChain) {
       setTruthLocalError('Switch to Base Mainnet to vote.');
       return;
@@ -344,7 +338,7 @@ export function ConfessionCard({
             </button>
             <button
               onClick={() => handleTruthVote(true)}
-              disabled={!isConnected || !address || wrongChain || isVoting || hasVoted || !truthVotingAvailable}
+              disabled={!isConnected || !address || wrongChain || isVoting || hasVoted}
               className="flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-bold
                 border border-pink-200 text-mauve bg-white
                 hover:bg-pink-50 hover:border-pink-300
@@ -354,7 +348,7 @@ export function ConfessionCard({
             </button>
             <button
               onClick={() => handleTruthVote(false)}
-              disabled={!isConnected || !address || wrongChain || isVoting || hasVoted || !truthVotingAvailable}
+              disabled={!isConnected || !address || wrongChain || isVoting || hasVoted}
               className="flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-bold
                 border border-pink-200 text-mauve bg-white
                 hover:bg-pink-50 hover:border-pink-300
