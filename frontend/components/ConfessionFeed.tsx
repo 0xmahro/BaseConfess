@@ -291,24 +291,6 @@ export function ConfessionFeed() {
     query: { enabled: paginated.length > 0 },
   });
 
-  const { data: confessionCountRead } = useReadContracts({
-    allowFailure: true,
-    contracts: address
-      ? [{
-          address: CONTRACT_ADDRESS,
-          abi: CONTRACT_ABI,
-          functionName: 'confessionCount',
-          args: [address],
-        }]
-      : [],
-    query: { enabled: Boolean(address) },
-  });
-  const canTruthVote = useMemo(() => {
-    if (!address) return false;
-    const row = confessionCountRead?.[0];
-    if (!row || row.status !== 'success') return false;
-    return Number(row.result as bigint) > 0;
-  }, [address, confessionCountRead]);
 
   const truthByConfessionId = useMemo(() => {
     const map: Record<number, TruthSnapshot> = {};
@@ -509,9 +491,6 @@ export function ConfessionFeed() {
           initialRealVotes={truthByConfessionId[confession.id]?.real ?? 0}
           initialFakeVotes={truthByConfessionId[confession.id]?.fake ?? 0}
           initialHasVoted={truthByConfessionId[confession.id]?.hasVoted ?? false}
-          canTruthVote={canTruthVote}
-          existsOnCurrentContract={truthByConfessionId[confession.id]?.existsOnCurrentContract ?? false}
-          existsOnLegacyContract={truthByConfessionId[confession.id]?.existsOnLegacyContract ?? false}
           likeDislikeContractAddress={truthByConfessionId[confession.id]?.likeDislikeContractAddress ?? null}
           username={walletToUsername[confession.wallet.toLowerCase()] ?? null}
         />

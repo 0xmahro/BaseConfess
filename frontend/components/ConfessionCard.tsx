@@ -17,9 +17,6 @@ interface ConfessionCardProps {
   initialRealVotes: number;
   initialFakeVotes: number;
   initialHasVoted: boolean;
-  canTruthVote: boolean;
-  existsOnCurrentContract: boolean;
-  existsOnLegacyContract: boolean;
   likeDislikeContractAddress: `0x${string}` | null;
   username?:  string | null;
 }
@@ -56,9 +53,6 @@ export function ConfessionCard({
   initialRealVotes,
   initialFakeVotes,
   initialHasVoted,
-  canTruthVote,
-  existsOnCurrentContract,
-  existsOnLegacyContract,
   likeDislikeContractAddress,
   username,
 }: ConfessionCardProps) {
@@ -104,8 +98,6 @@ export function ConfessionCard({
     : confession.text;
 
   const avatarGradient = walletColor(confession.wallet);
-  const truthVoteBlocked = !hasVoted && !canTruthVote;
-  const legacyConfession = !existsOnCurrentContract;
   const canUseLikeDislike = Boolean(likeDislikeContractAddress);
 
   useEffect(() => {
@@ -206,10 +198,6 @@ export function ConfessionCard({
 
   const handleTruthVote = (isReal: boolean) => {
     if (!isConnected || !address) return;
-    if (legacyConfession) {
-      setTruthLocalError('Bu itiraf eski kontrattan. Truth vote kullanilamaz.');
-      return;
-    }
     if (wrongChain) {
       setTruthLocalError('Switch to Base Mainnet to vote.');
       return;
@@ -350,7 +338,7 @@ export function ConfessionCard({
             </button>
             <button
               onClick={() => handleTruthVote(true)}
-              disabled={!isConnected || !address || wrongChain || isVoting || hasVoted || truthVoteBlocked || legacyConfession}
+              disabled={!isConnected || !address || wrongChain || isVoting || hasVoted}
               className="flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-bold
                 border border-pink-200 text-mauve bg-white
                 hover:bg-pink-50 hover:border-pink-300
@@ -360,7 +348,7 @@ export function ConfessionCard({
             </button>
             <button
               onClick={() => handleTruthVote(false)}
-              disabled={!isConnected || !address || wrongChain || isVoting || hasVoted || truthVoteBlocked || legacyConfession}
+              disabled={!isConnected || !address || wrongChain || isVoting || hasVoted}
               className="flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-bold
                 border border-pink-200 text-mauve bg-white
                 hover:bg-pink-50 hover:border-pink-300
@@ -419,16 +407,6 @@ export function ConfessionCard({
           )}
           {legacyVoteError && (
             <div className="text-[11px] font-bold text-red-500">{legacyVoteError}</div>
-          )}
-          {legacyConfession && (
-            <p className="text-[11px] font-semibold text-amber-600">
-              Bu kart eski kontrat kaydi. Like/Dislike aktif, Truth vote sadece yeni kontratta acik.
-            </p>
-          )}
-          {truthVoteBlocked && isConnected && !legacyConfession && (
-            <p className="text-[11px] font-semibold text-amber-600">
-              Truth vote icin yeni kontratta en az 1 itiraf paylasmalisin.
-            </p>
           )}
 
           {!isConnected && (
