@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useAccount, useChainId, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
+import { useAccount, useChainId, usePublicClient, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
 import { base } from 'wagmi/chains';
 import { TipModal } from './TipModal';
 import type { Confession, VoteType } from '@/types';
 import Link from 'next/link';
 import { useTruthVoting } from '@/hooks/useTruthVoting';
-import { CONTRACT_ABI } from '@/lib/config';
+import { CONTRACT_ABI, CONTRACT_ADDRESS, LEGACY_CONTRACT_ADDRESS, LEGACY_CONTRACT_ADDRESS_2 } from '@/lib/config';
 import { supabase } from '@/lib/supabase';
 
 interface ConfessionCardProps {
@@ -63,6 +63,7 @@ export function ConfessionCard({
   username,
 }: ConfessionCardProps) {
   const { address, isConnected } = useAccount();
+  const publicClient = usePublicClient({ chainId: base.id });
   const chainId    = useChainId();
   const wrongChain = isConnected && chainId !== base.id;
 
@@ -118,10 +119,6 @@ export function ConfessionCard({
 
   const handleLegacyVote = async (voteType: VoteType) => {
     if (!isConnected || !address) return;
-    if (!canUseLikeDislike) {
-      setLegacyVoteError('Bu itiraf icin oy kontrati bulunamadi.');
-      return;
-    }
     if (wrongChain) {
       setLegacyVoteError('Switch to Base');
       return;
@@ -146,7 +143,30 @@ export function ConfessionCard({
     setLocalUserVote(voteType);
 
     try {
-      const voteContractAddress = likeDislikeContractAddress;
+      let voteContractAddress = likeDislikeContractAddress;
+      if (!voteContractAddress && publicClient) {
+        const candidates: `0x${string}`[] = [
+          CONTRACT_ADDRESS,
+          LEGACY_CONTRACT_ADDRESS,
+          LEGACY_CONTRACT_ADDRESS_2,
+        ];
+        for (const candidate of candidates) {
+          try {
+            const owner = (await publicClient.readContract({
+              address: candidate,
+              abi: CONTRACT_ABI,
+              functionName: 'confessionOwner',
+              args: [BigInt(confession.id)],
+            })) as `0x${string}`;
+            if (owner && owner.toLowerCase() !== '0x0000000000000000000000000000000000000000') {
+              voteContractAddress = candidate;
+              break;
+            }
+          } catch {
+            // try next candidate
+          }
+        }
+      }
       if (!voteContractAddress) {
         setLegacyVoteError('Bu itiraf icin oy kontrati bulunamadi.');
         return;
@@ -294,7 +314,7 @@ export function ConfessionCard({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button
               onClick={() => handleLegacyVote(1)}
-              disabled={!isConnected || !!voteTxHash || !canUseLikeDislike}
+              disabled={!isConnected || !!voteTxHash}
               className={`
                 flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-bold
                 border bg-white transition-all duration-150 active:scale-95
@@ -312,7 +332,7 @@ export function ConfessionCard({
             </button>
             <button
               onClick={() => handleLegacyVote(-1)}
-              disabled={!isConnected || !!voteTxHash || !canUseLikeDislike}
+              disabled={!isConnected || !!voteTxHash}
               className={`
                 flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-bold
                 border bg-white transition-all duration-150 active:scale-95
