@@ -133,7 +133,7 @@ export function PostConfession() {
           maxLength={MAX_CHARS}
           className={`
             w-full resize-none rounded-2xl border px-4 py-3 pb-7
-            text-sm text-ink placeholder-pink-300 font-medium
+            text-sm text-ink placeholder-pink-400 font-semibold
             bg-pink-50 outline-none transition-all duration-200
             focus:border-pink-400 focus:ring-2 focus:ring-pink-100
             disabled:opacity-50 disabled:cursor-not-allowed
@@ -205,6 +205,18 @@ export function PostConfession() {
           <>🤫 Confess Anonymously</>
         )}
       </button>
+
+      {!canSubmit && !isProcessing && (
+        <p className="text-[11px] font-semibold text-[#7f758f] text-center">
+          {!isConnected
+            ? 'Connect wallet to post.'
+            : wrongChain
+              ? 'Switch to Base Mainnet.'
+              : text.trim().length < MIN_CONFESSION_CHARS
+                ? `Write at least ${MIN_CONFESSION_CHARS} characters.`
+                : null}
+        </p>
+      )}
     </div>
   );
 }

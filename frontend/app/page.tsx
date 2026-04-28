@@ -26,8 +26,8 @@ export default function Home() {
           <Link
             href="/profile"
             className="inline-flex items-center justify-center gap-2 py-2.5 px-6 rounded-2xl text-sm font-extrabold
-              border-2 border-pink-300 bg-white text-pink-600 shadow-sm
-              hover:bg-pink-50 hover:border-pink-400 hover:shadow-card transition-all duration-200 active:scale-[0.98]"
+              border border-pink-200 bg-white/90 text-pink-500 shadow-sm
+              hover:bg-pink-50 hover:border-pink-300 hover:text-pink-600 hover:shadow-card transition-all duration-200 active:scale-[0.98]"
           >
             <span className="text-base leading-none" aria-hidden>👤</span>
             Create Profile
@@ -36,7 +36,7 @@ export default function Home() {
 
         {/* Screen switcher */}
         <div
-          className="flex p-1 rounded-2xl bg-white/90 border border-pink-200 shadow-card gap-1"
+          className="flex overflow-x-auto no-scrollbar p-1 rounded-2xl bg-white/90 border border-pink-200 shadow-card gap-1"
           role="tablist"
           aria-label="Choose Confess, Wish Box, or Love Meter"
         >
@@ -46,11 +46,11 @@ export default function Home() {
             aria-selected={tab === 'confess'}
             onClick={() => setTab('confess')}
             className={`
-              flex-1 flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl text-sm font-extrabold
+              min-w-[112px] sm:min-w-0 flex-1 flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl text-sm font-extrabold
               transition-all duration-200 active:scale-[0.98]
               ${tab === 'confess'
                 ? 'bg-gradient-to-r from-pink-500 to-pink-400 text-white shadow-pink'
-                : 'text-mauve hover:text-pink-500 hover:bg-pink-50/80'
+                : 'text-[#7f758f] hover:text-pink-500 hover:bg-pink-50/80'
               }
             `}
           >
@@ -63,11 +63,11 @@ export default function Home() {
             aria-selected={tab === 'wish'}
             onClick={() => setTab('wish')}
             className={`
-              flex-1 flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl text-sm font-extrabold
+              min-w-[112px] sm:min-w-0 flex-1 flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl text-sm font-extrabold
               transition-all duration-200 active:scale-[0.98]
               ${tab === 'wish'
                 ? 'bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white shadow-[0_4px_16px_rgba(124,58,237,0.35)]'
-                : 'text-mauve hover:text-violet-600 hover:bg-violet-50/60'
+                : 'text-[#7f758f] hover:text-violet-600 hover:bg-violet-50/60'
               }
             `}
           >
@@ -80,11 +80,11 @@ export default function Home() {
             aria-selected={tab === 'love'}
             onClick={() => setTab('love')}
             className={`
-              flex-1 flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl text-sm font-extrabold
+              min-w-[112px] sm:min-w-0 flex-1 flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl text-sm font-extrabold
               transition-all duration-200 active:scale-[0.98]
               ${tab === 'love'
                 ? 'bg-gradient-to-r from-fuchsia-500 to-indigo-500 text-white shadow-[0_4px_16px_rgba(99,102,241,0.30)]'
-                : 'text-mauve hover:text-fuchsia-600 hover:bg-fuchsia-50/60'
+                : 'text-[#7f758f] hover:text-fuchsia-600 hover:bg-fuchsia-50/60'
               }
             `}
           >
@@ -95,9 +95,9 @@ export default function Home() {
             href="/top"
             role="tab"
             className={`
-              flex-1 flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl text-sm font-extrabold
+              min-w-[112px] sm:min-w-0 flex-1 flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl text-sm font-extrabold
               transition-all duration-200 active:scale-[0.98]
-              text-mauve hover:text-pink-500 hover:bg-pink-50/80
+              text-[#7f758f] hover:text-pink-500 hover:bg-pink-50/80
             `}
           >
             <span className="text-base leading-none">🏆</span>
@@ -107,9 +107,9 @@ export default function Home() {
             href="/profiles"
             role="tab"
             className={`
-              flex-1 flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl text-sm font-extrabold
+              min-w-[112px] sm:min-w-0 flex-1 flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl text-sm font-extrabold
               transition-all duration-200 active:scale-[0.98]
-              text-mauve hover:text-pink-500 hover:bg-pink-50/80
+              text-[#7f758f] hover:text-pink-500 hover:bg-pink-50/80
             `}
           >
             <span className="text-base leading-none">👥</span>
@@ -124,7 +124,7 @@ export default function Home() {
               <h1 className="text-2xl font-extrabold text-ink tracking-tight">
                 Confess Anonymously
               </h1>
-              <p className="text-sm text-mauve font-semibold max-w-xs mx-auto leading-relaxed">
+              <p className="text-sm text-[#7f758f] font-semibold max-w-xs mx-auto leading-relaxed">
                 Your secret lives on Base forever.<br />No names. Just truth.
               </p>
               <div className="inline-flex items-center gap-1.5 bg-white border border-pink-200 rounded-full px-3 py-1.5 text-xs font-bold text-pink-500 shadow-sm">
