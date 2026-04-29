@@ -71,10 +71,15 @@ export function PostConfession() {
           confessionId: bigint; confessionHash: `0x${string}`; timestamp: bigint;
         };
 
-        await supabase.from('confessions').upsert(
+        const { error: upsertError } = await supabase.from('confessions').upsert(
           { id: Number(confessionId), wallet: address.toLowerCase(), text: capturedText, hash: confessionHash, timestamp: new Date(Number(timestamp) * 1000).toISOString() },
           { onConflict: 'id' }
         );
+        if (upsertError) throw upsertError;
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('confession:posted'));
+        }
       } catch (err) {
         console.error('[PostConfession] Supabase write error:', err);
       } finally {

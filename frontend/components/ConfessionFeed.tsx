@@ -26,8 +26,7 @@ const SORT_TABS: { key: SortKey; label: string; emoji: string }[] = [
 
 const PAGE_SIZE = 30;
 
-/** Rows loaded for sorting/pagination; real total can be higher (see totalCount). */
-const FEED_FETCH_LIMIT = 2000;
+const FEED_BATCH_SIZE = 1000;
 type TruthSnapshot = {
   real: number;
   fake: number;
@@ -156,22 +155,45 @@ export function ConfessionFeed() {
   const [totalCount,  setTotalCount]  = useState<number | null>(null);
 
   const fetchConfessions = useCallback(async () => {
-    const [countRes, rowsRes] = await Promise.all([
-      supabase.from('confessions').select('id', { count: 'exact', head: true }),
-      supabase
+    const { count, error: countError } = await supabase
+      .from('confessions')
+      .select('id', { count: 'exact', head: true });
+
+    if (countError) {
+      setTotalCount(null);
+    } else {
+      setTotalCount(count ?? null);
+    }
+
+    const allRows: Confession[] = [];
+    let from = 0;
+
+    while (true) {
+      const to = from + FEED_BATCH_SIZE - 1;
+      const { data, error: rowsError } = await supabase
         .from('confessions')
         .select('*')
         .order('id', { ascending: false })
-        .limit(FEED_FETCH_LIMIT),
-    ]);
+        .range(from, to);
 
-    if (rowsRes.error) {
+      if (rowsError) {
+        setError('Could not load confessions.');
+        return;
+      }
+
+      const pageRows = (data as Confession[] | null) ?? [];
+      allRows.push(...pageRows);
+      if (pageRows.length < FEED_BATCH_SIZE) break;
+      from += FEED_BATCH_SIZE;
+    }
+
+    if (allRows.length === 0 && count === null) {
       setError('Could not load confessions.');
       return;
     }
+
     setError('');
-    setConfessions((rowsRes.data as Confession[]) ?? []);
-    setTotalCount(countRes.error ? null : (countRes.count ?? null));
+    setConfessions(allRows);
   }, []);
 
   const fetchUserVotes = useCallback(async (wallet: string) => {
@@ -218,6 +240,17 @@ export function ConfessionFeed() {
 
     return () => { supabase.removeChannel(channel); };
   }, []);
+
+  useEffect(() => {
+    const handlePosted = () => {
+      fetchConfessions();
+      setPage(1);
+    };
+    window.addEventListener('confession:posted', handlePosted);
+    return () => {
+      window.removeEventListener('confession:posted', handlePosted);
+    };
+  }, [fetchConfessions]);
 
   // Reset to page 1 when sort changes
   const handleSortChange = (key: SortKey) => {
