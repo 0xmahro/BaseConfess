@@ -31,7 +31,7 @@ export const CONFESSION_FEE = '0.000025'; // ETH — must match confessionFee in
 // ============================================================
 export const TRUTH_REGISTRY_ADDRESS =
   (process.env.NEXT_PUBLIC_TRUTH_REGISTRY_ADDRESS ??
-    '0x0000000000000000000000000000000000000000') as `0x${string}`;
+    '0xEdbd12f449bCebB144E44FfC87Da2c5bB3d01b9d') as `0x${string}`;
 
 export const TRUTH_REGISTRY_ABI = [
   {
