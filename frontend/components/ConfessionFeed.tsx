@@ -157,7 +157,7 @@ export function ConfessionFeed() {
 
   const fetchConfessions = useCallback(async () => {
     const [countRes, rowsRes] = await Promise.all([
-      supabase.from('confessions').select('*', { count: 'exact', head: true }),
+      supabase.from('confessions').select('id', { count: 'exact', head: true }),
       supabase
         .from('confessions')
         .select('*')
@@ -171,7 +171,7 @@ export function ConfessionFeed() {
     }
     setError('');
     setConfessions((rowsRes.data as Confession[]) ?? []);
-    setTotalCount(countRes.count ?? null);
+    setTotalCount(countRes.error ? null : (countRes.count ?? null));
   }, []);
 
   const fetchUserVotes = useCallback(async (wallet: string) => {
@@ -202,8 +202,12 @@ export function ConfessionFeed() {
     const channel = supabase
       .channel('feed_changes')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'confessions' }, (payload) => {
-        setConfessions((prev) => [payload.new as Confession, ...prev]);
-        setTotalCount((c) => (c != null ? c + 1 : null));
+        const nextRow = payload.new as Confession;
+        setConfessions((prev) => {
+          if (prev.some((c) => c.id === nextRow.id)) return prev;
+          setTotalCount((c) => (c != null ? c + 1 : null));
+          return [nextRow, ...prev];
+        });
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'confessions' }, (payload) => {
         setConfessions((prev) =>

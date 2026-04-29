@@ -24,6 +24,26 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+async function fetchAllRows<T>(
+  fetchPage: (from: number, to: number) => Promise<{ data: T[] | null; error: { message?: string } | null }>
+): Promise<T[]> {
+  const pageSize = 1000;
+  const rows: T[] = [];
+  let from = 0;
+
+  while (true) {
+    const to = from + pageSize - 1;
+    const { data, error } = await fetchPage(from, to);
+    if (error) throw new Error(error.message ?? 'Failed to read rows.');
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return rows;
+}
+
 export async function GET() {
   if (PROFILE_CONTRACT_ADDRESS === '0x0000000000000000000000000000000000000000') {
     return NextResponse.json({ ok: true, profiles: [] as ProfileRow[] });
@@ -31,17 +51,13 @@ export async function GET() {
 
   try {
     const sb = supabaseServer();
-    const { data: confessionRows, error } = await sb
-      .from('confessions')
-      .select('id,wallet')
-      .order('timestamp', { ascending: false })
-      .limit(3000);
-
-    if (error) {
-      return NextResponse.json({ ok: false, error: 'Failed to read wallets.' }, { status: 500 });
-    }
-
-    const confRows = (confessionRows as { id: number; wallet: string }[] | null) ?? [];
+    const confRows = await fetchAllRows<{ id: number; wallet: string }>((from, to) =>
+      sb
+        .from('confessions')
+        .select('id,wallet')
+        .order('id', { ascending: false })
+        .range(from, to)
+    );
     const uniqueWallets = Array.from(
       new Set(confRows.map((r) => r.wallet?.toLowerCase()).filter(Boolean))
     ) as string[];
@@ -60,20 +76,26 @@ export async function GET() {
     const likesByWallet = new Map<string, number>();
     const tipTxCountByWallet = new Map<string, number>();
 
-    const { data: votesRows } = await sb
-      .from('votes')
-      .select('confession_id,vote')
-      .eq('vote', 1);
-    for (const row of (votesRows as { confession_id: number; vote: number }[] | null) ?? []) {
+    const votesRows = await fetchAllRows<{ confession_id: number; vote: number }>((from, to) =>
+      sb
+        .from('votes')
+        .select('confession_id,vote')
+        .eq('vote', 1)
+        .range(from, to)
+    );
+    for (const row of votesRows) {
       const owner = ownerByConfessionId.get(Number(row.confession_id));
       if (!owner) continue;
       likesByWallet.set(owner, (likesByWallet.get(owner) ?? 0) + 1);
     }
 
-    const { data: tipRows } = await sb
-      .from('tips')
-      .select('to_wallet');
-    for (const row of (tipRows as { to_wallet: string }[] | null) ?? []) {
+    const tipRows = await fetchAllRows<{ to_wallet: string }>((from, to) =>
+      sb
+        .from('tips')
+        .select('to_wallet')
+        .range(from, to)
+    );
+    for (const row of tipRows) {
       const w = row.to_wallet?.toLowerCase();
       if (!w) continue;
       tipTxCountByWallet.set(w, (tipTxCountByWallet.get(w) ?? 0) + 1);

@@ -113,17 +113,18 @@ export function ProfileView({ targetAddress }: { targetAddress: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [hasMore, setHasMore] = useState(false);
+  const [totalConfessionCount, setTotalConfessionCount] = useState<number | null>(null);
 
   // ---- Activity score (frontend-indexed) ----
   const tipsReceivedEth = Number(formatEther(profile?.totalTipsReceived ?? BigInt(0)));
   const totalSpentEth = Number(formatEther(profile?.totalSpent ?? BigInt(0)));
   const computedActivityScore = useMemo(() => {
-    const confessionCount = confessions.length;
+    const confessionCount = totalConfessionCount ?? confessions.length;
     const tips = tipsReceivedEth;
     const spent = totalSpentEth;
     const wishes = wishCountForProfile ?? 0;
     return Math.floor(confessionCount * 2 + wishes * 2 + tips * 5 + spent * 10);
-  }, [confessions.length, tipsReceivedEth, totalSpentEth, wishCountForProfile]);
+  }, [totalConfessionCount, confessions.length, tipsReceivedEth, totalSpentEth, wishCountForProfile]);
 
   const PAGE_SIZE = 30;
 
@@ -134,19 +135,34 @@ export function ProfileView({ targetAddress }: { targetAddress: string }) {
     try {
       const from = reset ? 0 : confessions.length;
       const to = from + PAGE_SIZE - 1;
-      const { data, error: err } = await supabase
-        .from('confessions')
-        .select('*')
-        .eq('wallet', profileAddress)
-        .order('id', { ascending: false })
-        .range(from, to);
+      const [countRes, rowsRes] = await Promise.all([
+        supabase
+          .from('confessions')
+          .select('id', { count: 'exact', head: true })
+          .eq('wallet', profileAddress),
+        supabase
+          .from('confessions')
+          .select('*')
+          .eq('wallet', profileAddress)
+          .order('id', { ascending: false })
+          .range(from, to),
+      ]);
+      const err = rowsRes.error ?? countRes.error;
       if (err) throw err;
-      const next = (data as Confession[]) ?? [];
+      const next = (rowsRes.data as Confession[]) ?? [];
+      const total = countRes.count ?? null;
       setConfessions((prev) => (reset ? next : [...prev, ...next]));
-      setHasMore(next.length === PAGE_SIZE);
+      setTotalConfessionCount(total);
+      if (total != null) {
+        const loadedCount = reset ? next.length : confessions.length + next.length;
+        setHasMore(loadedCount < total);
+      } else {
+        setHasMore(next.length === PAGE_SIZE);
+      }
     } catch {
       setError('Could not load confessions.');
       setConfessions([]);
+      setTotalConfessionCount(null);
       setHasMore(false);
     } finally {
       setLoading(false);
@@ -372,7 +388,7 @@ export function ProfileView({ targetAddress }: { targetAddress: string }) {
           </div>
           <div className="rounded-2xl border border-pink-200 bg-white p-4">
             <p className="text-[11px] font-extrabold text-mauve">Confessions</p>
-            <p className="text-xl font-extrabold text-ink">{confessions.length}</p>
+            <p className="text-xl font-extrabold text-ink">{totalConfessionCount ?? confessions.length}</p>
           </div>
         </div>
       </div>
