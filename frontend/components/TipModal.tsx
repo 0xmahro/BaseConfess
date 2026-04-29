@@ -1,26 +1,47 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useChainId } from 'wagmi';
+import {
+  useAccount,
+  useWriteContract,
+  useWaitForTransactionReceipt,
+  useChainId,
+  usePublicClient,
+} from 'wagmi';
 import { base } from 'wagmi/chains';
 import { parseEther } from 'viem';
 import { builderCodeTxOpts } from '@/lib/builderCode';
-import { CONTRACT_ADDRESS, CONTRACT_ABI } from '@/lib/config';
+import {
+  CONTRACT_ADDRESS,
+  CONTRACT_ABI,
+  LEGACY_CONTRACT_ADDRESS,
+  LEGACY_CONTRACT_ADDRESS_2,
+  TRUTH_CONTRACT_FALLBACK_ADDRESS,
+} from '@/lib/config';
 import { supabase } from '@/lib/supabase';
 import { toOnchainConfessionId } from '@/lib/confessionId';
 
 interface TipModalProps {
   confessionId: number;
   ownerWallet:  string;
+  /**
+   * Address of the Confessions deployment that holds this confession.
+   * If null, the modal will probe known deployments to find the owning
+   * contract before submitting the tip.
+   */
+  tipContractAddress?: `0x${string}` | null;
   onClose:      () => void;
 }
 
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
 const QUICK_AMOUNTS = ['0.001', '0.005', '0.01'];
 
-export function TipModal({ confessionId, ownerWallet, onClose }: TipModalProps) {
+export function TipModal({ confessionId, ownerWallet, tipContractAddress, onClose }: TipModalProps) {
   const { address } = useAccount();
   const chainId     = useChainId();
   const wrongChain  = chainId !== base.id;
+  const publicClient = usePublicClient();
 
   const [amount,       setAmount]    = useState('0.001');
   const [customAmount, setCustom]    = useState('');
@@ -44,11 +65,47 @@ export function TipModal({ confessionId, ownerWallet, onClose }: TipModalProps) 
     setIsPending(true);
 
     try {
+      const onchainConfessionId = toOnchainConfessionId(confessionId);
+      let targetContract: `0x${string}` | null =
+        tipContractAddress && tipContractAddress !== ZERO_ADDRESS
+          ? tipContractAddress
+          : null;
+
+      if (!targetContract && publicClient) {
+        const candidates: `0x${string}`[] = [
+          CONTRACT_ADDRESS,
+          TRUTH_CONTRACT_FALLBACK_ADDRESS,
+          LEGACY_CONTRACT_ADDRESS,
+          LEGACY_CONTRACT_ADDRESS_2,
+        ];
+        for (const candidate of candidates) {
+          try {
+            const owner = (await publicClient.readContract({
+              address: candidate,
+              abi: CONTRACT_ABI,
+              functionName: 'confessionOwner',
+              args: [onchainConfessionId],
+            })) as `0x${string}`;
+            if (owner && owner.toLowerCase() !== ZERO_ADDRESS) {
+              targetContract = candidate;
+              break;
+            }
+          } catch {
+            // try next candidate
+          }
+        }
+      }
+
+      if (!targetContract) {
+        setError('No tipping contract found for this confession.');
+        return;
+      }
+
       const hash = await writeContractAsync({
-        address:      CONTRACT_ADDRESS,
+        address:      targetContract,
         abi:          CONTRACT_ABI,
         functionName: 'tip',
-        args:         [toOnchainConfessionId(confessionId)],
+        args:         [onchainConfessionId],
         value:        parseEther(finalAmount),
         ...builderCodeTxOpts(),
       });
@@ -56,9 +113,12 @@ export function TipModal({ confessionId, ownerWallet, onClose }: TipModalProps) 
       setTxHash(hash);
     } catch (err: unknown) {
       const msg      = err instanceof Error ? err.message : '';
-      const rejected = msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('denied');
+      const lower    = msg.toLowerCase();
+      const rejected = lower.includes('user rejected') || lower.includes('denied');
       if (rejected) setError('Transaction cancelled.');
-      else if (msg.includes('ContractFunctionExecution') || msg.includes('execution reverted'))
+      else if (lower.includes('confession not found'))
+        setError('Tipping is not available on this legacy confession.');
+      else if (msg.includes('ContractFunctionExecution') || lower.includes('execution reverted'))
         setError('Contract error — check you are on Base Mainnet.');
       else setError('Transaction failed. Check balance and network.');
     } finally {

@@ -454,6 +454,7 @@ export function ConfessionCard({
         <TipModal
           confessionId={confession.id}
           ownerWallet={confession.wallet}
+          tipContractAddress={likeDislikeContractAddress}
           onClose={() => setShowTipModal(false)}
         />
       )}
