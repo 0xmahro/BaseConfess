@@ -51,13 +51,14 @@ export async function GET() {
 
   try {
     const sb = supabaseServer();
-    const confRows = await fetchAllRows<{ id: number; wallet: string }>((from, to) =>
-      sb
+    const confRows = await fetchAllRows<{ id: number; wallet: string }>(async (from, to) => {
+      const { data, error } = await sb
         .from('confessions')
         .select('id,wallet')
         .order('id', { ascending: false })
-        .range(from, to)
-    );
+        .range(from, to);
+      return { data: data as { id: number; wallet: string }[] | null, error };
+    });
     const uniqueWallets = Array.from(
       new Set(confRows.map((r) => r.wallet?.toLowerCase()).filter(Boolean))
     ) as string[];
@@ -76,25 +77,27 @@ export async function GET() {
     const likesByWallet = new Map<string, number>();
     const tipTxCountByWallet = new Map<string, number>();
 
-    const votesRows = await fetchAllRows<{ confession_id: number; vote: number }>((from, to) =>
-      sb
+    const votesRows = await fetchAllRows<{ confession_id: number; vote: number }>(async (from, to) => {
+      const { data, error } = await sb
         .from('votes')
         .select('confession_id,vote')
         .eq('vote', 1)
-        .range(from, to)
-    );
+        .range(from, to);
+      return { data: data as { confession_id: number; vote: number }[] | null, error };
+    });
     for (const row of votesRows) {
       const owner = ownerByConfessionId.get(Number(row.confession_id));
       if (!owner) continue;
       likesByWallet.set(owner, (likesByWallet.get(owner) ?? 0) + 1);
     }
 
-    const tipRows = await fetchAllRows<{ to_wallet: string }>((from, to) =>
-      sb
+    const tipRows = await fetchAllRows<{ to_wallet: string }>(async (from, to) => {
+      const { data, error } = await sb
         .from('tips')
         .select('to_wallet')
-        .range(from, to)
-    );
+        .range(from, to);
+      return { data: data as { to_wallet: string }[] | null, error };
+    });
     for (const row of tipRows) {
       const w = row.to_wallet?.toLowerCase();
       if (!w) continue;
