@@ -40,7 +40,12 @@ function sortConfessions(list: Confession[], key: SortKey): Confession[] {
   const copy = [...list];
   switch (key) {
     case 'newest':
-      return copy.sort((a, b) => b.id - a.id);
+      return copy.sort((a, b) => {
+        const ta = Date.parse(a.timestamp ?? a.created_at ?? '') || 0;
+        const tb = Date.parse(b.timestamp ?? b.created_at ?? '') || 0;
+        if (tb !== ta) return tb - ta;
+        return b.id - a.id;
+      });
     case 'most_liked':    return copy.sort((a, b) => b.likes - a.likes);
     case 'most_disliked': return copy.sort((a, b) => b.dislikes - a.dislikes);
     case 'most_tipped':   return copy.sort((a, b) => b.tips_received - a.tips_received);
@@ -174,6 +179,7 @@ export function ConfessionFeed() {
       const { data, error: rowsError } = await supabase
         .from('confessions')
         .select('*')
+        .order('timestamp', { ascending: false })
         .order('id', { ascending: false })
         .range(from, to);
 

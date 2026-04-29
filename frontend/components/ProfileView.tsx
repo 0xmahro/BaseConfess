@@ -144,6 +144,7 @@ export function ProfileView({ targetAddress }: { targetAddress: string }) {
           .from('confessions')
           .select('*')
           .eq('wallet', profileAddress)
+          .order('timestamp', { ascending: false })
           .order('id', { ascending: false })
           .range(from, to),
       ]);
