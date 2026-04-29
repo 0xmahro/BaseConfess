@@ -7,7 +7,7 @@
 // ============================================================
 
 export const CONTRACT_ADDRESS =
-  '0x6c22d5F4b3Ff90ddCe263a795AD22f2A3d033140' as `0x${string}`;
+  '0x23BeF661be8c8C251613ac4fC486bc2915403E21' as `0x${string}`;
 
 export const CONTRACT_ABI = [
   {
