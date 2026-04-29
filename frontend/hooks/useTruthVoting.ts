@@ -2,16 +2,21 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { CONTRACT_ABI } from '@/lib/config';
-import { toOnchainConfessionId } from '@/lib/confessionId';
+import { TRUTH_REGISTRY_ABI, TRUTH_REGISTRY_ADDRESS } from '@/lib/config';
 import { builderCodeTxOpts } from '@/lib/builderCode';
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 type UseTruthVotingParams = {
   confessionId: number;
   initialRealVotes: number;
   initialFakeVotes: number;
   initialHasVoted: boolean;
-  contractAddress: `0x${string}` | null;
+  /**
+   * Optional override (e.g. a custom registry deployment). Defaults to
+   * the project-wide TRUTH_REGISTRY_ADDRESS configured via env.
+   */
+  contractAddress?: `0x${string}` | null;
 };
 
 export function useTruthVoting({
@@ -21,6 +26,12 @@ export function useTruthVoting({
   initialHasVoted,
   contractAddress,
 }: UseTruthVotingParams) {
+  const registryAddress =
+    contractAddress && contractAddress !== ZERO_ADDRESS
+      ? contractAddress
+      : TRUTH_REGISTRY_ADDRESS !== ZERO_ADDRESS
+        ? TRUTH_REGISTRY_ADDRESS
+        : null;
   const [realVotes, setRealVotes] = useState(initialRealVotes);
   const [fakeVotes, setFakeVotes] = useState(initialFakeVotes);
   const [hasVoted, setHasVoted] = useState(initialHasVoted);
@@ -85,28 +96,26 @@ export function useTruthVoting({
   const submitVote = async (isReal: boolean) => {
     if (hasVoted || txHash) return;
     setError('');
-    if (!contractAddress) {
-      setError('Truth voting is unavailable for this confession.');
+    if (!registryAddress) {
+      setError('Truth voting is not configured yet.');
       return;
     }
 
-    // Optimistic UI: immediately lock choices and update counters.
     setHasVoted(true);
     if (isReal) setRealVotes((v) => v + 1);
     else setFakeVotes((v) => v + 1);
 
     try {
       const hash = await writeContractAsync({
-        address: contractAddress,
-        abi: CONTRACT_ABI,
+        address: registryAddress,
+        abi: TRUTH_REGISTRY_ABI,
         functionName: 'voteTruth',
-        args: [toOnchainConfessionId(confessionId), isReal],
-        gas: BigInt(220000),
+        args: [BigInt(confessionId), isReal],
+        gas: BigInt(120000),
         ...builderCodeTxOpts(),
       });
       setTxHash(hash);
     } catch (err: unknown) {
-      // Revert optimistic state on tx failure.
       setHasVoted(initialHasVoted);
       setRealVotes(initialRealVotes);
       setFakeVotes(initialFakeVotes);
@@ -117,15 +126,8 @@ export function useTruthVoting({
         normalized.includes('denied');
       if (rejected) {
         setError('');
-      } else if (
-        normalized.includes('post at least 1 confession') ||
-        normalized.includes('post at least one confession')
-      ) {
-        setError('Post at least one confession before voting.');
       } else if (normalized.includes('already voted')) {
         setError('You already voted on this confession.');
-      } else if (normalized.includes('confession not found')) {
-        setError('Truth vote bu itirafta kullanilamiyor.');
       } else {
         setError('Vote failed. Try again.');
       }

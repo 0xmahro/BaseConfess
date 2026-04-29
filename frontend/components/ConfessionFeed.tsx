@@ -11,10 +11,14 @@ import {
   LEGACY_CONTRACT_ADDRESS,
   LEGACY_CONTRACT_ADDRESS_2,
   TRUTH_CONTRACT_FALLBACK_ADDRESS,
+  TRUTH_REGISTRY_ABI,
+  TRUTH_REGISTRY_ADDRESS,
   PROFILE_CONTRACT_ABI,
   PROFILE_CONTRACT_ADDRESS,
 } from '@/lib/config';
 import { toOnchainConfessionId } from '@/lib/confessionId';
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 type SortKey = 'newest' | 'most_liked' | 'most_disliked' | 'most_tipped';
 
@@ -285,78 +289,45 @@ export function ConfessionFeed() {
     return Array.from(uniq);
   }, [paginated]);
 
+  const registryEnabled = TRUTH_REGISTRY_ADDRESS !== ZERO_ADDRESS;
+
   const truthContracts = useMemo(() => {
     return paginated.flatMap((c) => {
-      const confessionId = toOnchainConfessionId(c.id);
-      const ownerCall = {
-        address: CONTRACT_ADDRESS,
-        abi: CONTRACT_ABI,
-        functionName: 'confessionOwner' as const,
-        args: [confessionId],
-      };
-      const truthFallbackOwnerCall = {
-        address: TRUTH_CONTRACT_FALLBACK_ADDRESS,
-        abi: CONTRACT_ABI,
-        functionName: 'confessionOwner' as const,
-        args: [confessionId],
-      };
-      const legacyOwnerCall = {
-        address: LEGACY_CONTRACT_ADDRESS,
-        abi: CONTRACT_ABI,
-        functionName: 'confessionOwner' as const,
-        args: [confessionId],
-      };
-      const legacyOwnerCall2 = {
-        address: LEGACY_CONTRACT_ADDRESS_2,
-        abi: CONTRACT_ABI,
-        functionName: 'confessionOwner' as const,
-        args: [confessionId],
-      };
-      const statsCall = {
-        address: CONTRACT_ADDRESS,
-        abi: CONTRACT_ABI,
-        functionName: 'getTruthStats' as const,
-        args: [confessionId],
-      };
-      const truthFallbackStatsCall = {
-        address: TRUTH_CONTRACT_FALLBACK_ADDRESS,
-        abi: CONTRACT_ABI,
-        functionName: 'getTruthStats' as const,
-        args: [confessionId],
-      };
-
-      if (!address) {
-        return [
-          ownerCall,
-          truthFallbackOwnerCall,
-          legacyOwnerCall,
-          legacyOwnerCall2,
-          statsCall,
-          truthFallbackStatsCall,
-        ];
-      }
-      return [
-        ownerCall,
-        truthFallbackOwnerCall,
-        legacyOwnerCall,
-        legacyOwnerCall2,
-        statsCall,
-        truthFallbackStatsCall,
-        {
-          address: CONTRACT_ADDRESS,
-          abi: CONTRACT_ABI,
-          functionName: 'hasVoted' as const,
-          args: [confessionId, address],
-        },
-        {
-          address: TRUTH_CONTRACT_FALLBACK_ADDRESS,
-          abi: CONTRACT_ABI,
-          functionName: 'hasVoted' as const,
-          args: [confessionId, address],
-        },
+      const onchainId = toOnchainConfessionId(c.id);
+      const dbId = BigInt(c.id);
+      const calls: {
+        address: `0x${string}`;
+        abi: typeof CONTRACT_ABI | typeof TRUTH_REGISTRY_ABI;
+        functionName: string;
+        args: readonly unknown[];
+      }[] = [
+        // Owner lookups still target Confessions contracts so we know which
+        // generation owns the confession (used for like/dislike + tip routing).
+        { address: CONTRACT_ADDRESS,                  abi: CONTRACT_ABI, functionName: 'confessionOwner', args: [onchainId] },
+        { address: TRUTH_CONTRACT_FALLBACK_ADDRESS,   abi: CONTRACT_ABI, functionName: 'confessionOwner', args: [onchainId] },
+        { address: LEGACY_CONTRACT_ADDRESS,           abi: CONTRACT_ABI, functionName: 'confessionOwner', args: [onchainId] },
+        { address: LEGACY_CONTRACT_ADDRESS_2,         abi: CONTRACT_ABI, functionName: 'confessionOwner', args: [onchainId] },
       ];
+      // Real/fake is now a single global registry indexed by namespaced db id.
+      if (registryEnabled) {
+        calls.push({
+          address: TRUTH_REGISTRY_ADDRESS,
+          abi: TRUTH_REGISTRY_ABI,
+          functionName: 'getTruthStats',
+          args: [dbId],
+        });
+        if (address) {
+          calls.push({
+            address: TRUTH_REGISTRY_ADDRESS,
+            abi: TRUTH_REGISTRY_ABI,
+            functionName: 'hasVoted',
+            args: [dbId, address],
+          });
+        }
+      }
+      return calls;
     });
-  }, [paginated, address]);
+  }, [paginated, address, registryEnabled]);
 
   const { data: truthReads } = useReadContracts({
     allowFailure: true,
@@ -369,17 +340,18 @@ export function ConfessionFeed() {
     const map: Record<number, TruthSnapshot> = {};
     if (!truthReads) return map;
 
+    const callsPerRow = 4 + (registryEnabled ? 1 : 0) + (registryEnabled && address ? 1 : 0);
+
     for (let i = 0; i < paginated.length; i += 1) {
       const confessionId = paginated[i].id;
-      const baseIdx = address ? i * 8 : i * 6;
-      const ownerRes = truthReads[baseIdx];
-      const truthFallbackOwnerRes = truthReads[baseIdx + 1];
-      const legacyOwnerRes = truthReads[baseIdx + 2];
-      const legacyOwnerRes2 = truthReads[baseIdx + 3];
-      const statsRes = truthReads[baseIdx + 4];
-      const truthFallbackStatsRes = truthReads[baseIdx + 5];
-      const votedRes = address ? truthReads[baseIdx + 6] : null;
-      const truthFallbackVotedRes = address ? truthReads[baseIdx + 7] : null;
+      const baseIdx = i * callsPerRow;
+      const ownerRes               = truthReads[baseIdx];
+      const truthFallbackOwnerRes  = truthReads[baseIdx + 1];
+      const legacyOwnerRes         = truthReads[baseIdx + 2];
+      const legacyOwnerRes2        = truthReads[baseIdx + 3];
+      const registryStatsRes       = registryEnabled ? truthReads[baseIdx + 4] : null;
+      const registryVotedRes       =
+        registryEnabled && address ? truthReads[baseIdx + 5] : null;
 
       let real = 0;
       let fake = 0;
@@ -389,67 +361,44 @@ export function ConfessionFeed() {
       let existsOnLegacyContract = false;
       let existsOnLegacyContract2 = false;
       let likeDislikeContractAddress: `0x${string}` | null = null;
-      let truthContractAddress: `0x${string}` | null = null;
 
       if (ownerRes?.status === 'success') {
-        const owner = String(ownerRes.result ?? '').toLowerCase();
-        existsOnCurrentContract = owner !== '0x0000000000000000000000000000000000000000';
+        existsOnCurrentContract = String(ownerRes.result ?? '').toLowerCase() !== ZERO_ADDRESS;
       }
       if (truthFallbackOwnerRes?.status === 'success') {
-        const fallbackOwner = String(truthFallbackOwnerRes.result ?? '').toLowerCase();
-        existsOnTruthFallback = fallbackOwner !== '0x0000000000000000000000000000000000000000';
+        existsOnTruthFallback = String(truthFallbackOwnerRes.result ?? '').toLowerCase() !== ZERO_ADDRESS;
       }
       if (legacyOwnerRes?.status === 'success') {
-        const legacyOwner = String(legacyOwnerRes.result ?? '').toLowerCase();
-        existsOnLegacyContract = legacyOwner !== '0x0000000000000000000000000000000000000000';
+        existsOnLegacyContract = String(legacyOwnerRes.result ?? '').toLowerCase() !== ZERO_ADDRESS;
       }
       if (legacyOwnerRes2?.status === 'success') {
-        const legacyOwner2 = String(legacyOwnerRes2.result ?? '').toLowerCase();
-        existsOnLegacyContract2 = legacyOwner2 !== '0x0000000000000000000000000000000000000000';
+        existsOnLegacyContract2 = String(legacyOwnerRes2.result ?? '').toLowerCase() !== ZERO_ADDRESS;
       }
 
-      if (existsOnCurrentContract) {
-        likeDislikeContractAddress = CONTRACT_ADDRESS;
-        truthContractAddress = CONTRACT_ADDRESS;
-      } else if (existsOnTruthFallback) {
-        likeDislikeContractAddress = TRUTH_CONTRACT_FALLBACK_ADDRESS;
-        truthContractAddress = TRUTH_CONTRACT_FALLBACK_ADDRESS;
-      } else if (existsOnLegacyContract) {
-        likeDislikeContractAddress = LEGACY_CONTRACT_ADDRESS;
-      } else if (existsOnLegacyContract2) {
-        likeDislikeContractAddress = LEGACY_CONTRACT_ADDRESS_2;
-      }
+      if (existsOnCurrentContract)         likeDislikeContractAddress = CONTRACT_ADDRESS;
+      else if (existsOnTruthFallback)      likeDislikeContractAddress = TRUTH_CONTRACT_FALLBACK_ADDRESS;
+      else if (existsOnLegacyContract)     likeDislikeContractAddress = LEGACY_CONTRACT_ADDRESS;
+      else if (existsOnLegacyContract2)    likeDislikeContractAddress = LEGACY_CONTRACT_ADDRESS_2;
 
-      if (truthContractAddress === CONTRACT_ADDRESS) {
-        if (statsRes?.status === 'success') {
-          const stats = statsRes.result as [bigint, bigint];
-          real = Number(stats[0]);
-          fake = Number(stats[1]);
-        }
-        if (votedRes?.status === 'success') {
-          hasVoted = Boolean(votedRes.result as boolean);
-        }
-      } else if (truthContractAddress === TRUTH_CONTRACT_FALLBACK_ADDRESS) {
-        if (truthFallbackStatsRes?.status === 'success') {
-          const stats = truthFallbackStatsRes.result as [bigint, bigint];
-          real = Number(stats[0]);
-          fake = Number(stats[1]);
-        }
-        if (truthFallbackVotedRes?.status === 'success') {
-          hasVoted = Boolean(truthFallbackVotedRes.result as boolean);
-        }
+      if (registryStatsRes?.status === 'success') {
+        const stats = registryStatsRes.result as unknown as [bigint, bigint];
+        real = Number(stats?.[0] ?? 0);
+        fake = Number(stats?.[1] ?? 0);
+      }
+      if (registryVotedRes?.status === 'success') {
+        hasVoted = Boolean(registryVotedRes.result as unknown as boolean);
       }
 
       map[confessionId] = {
         real,
         fake,
         hasVoted,
-        truthContractAddress,
+        truthContractAddress: registryEnabled ? TRUTH_REGISTRY_ADDRESS : null,
         likeDislikeContractAddress,
       };
     }
     return map;
-  }, [truthReads, paginated, address]);
+  }, [truthReads, paginated, address, registryEnabled]);
 
   const { data: profiles } = useReadContracts({
     allowFailure: true,

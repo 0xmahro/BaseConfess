@@ -22,6 +22,75 @@ export const LEGACY_CONTRACT_ADDRESS_2 =
 export const CONFESSION_FEE = '0.000025'; // ETH — must match confessionFee in contract
 
 // ============================================================
+// TRUTH REGISTRY
+// ------------------------------------------------------------
+// Cross-contract real/fake voting registry. Anyone can vote on
+// any (namespaced Supabase) confession id. Set the deployed
+// address via NEXT_PUBLIC_TRUTH_REGISTRY_ADDRESS once the
+// `contracts/TruthRegistry.sol` is deployed on Base.
+// ============================================================
+export const TRUTH_REGISTRY_ADDRESS =
+  (process.env.NEXT_PUBLIC_TRUTH_REGISTRY_ADDRESS ??
+    '0x0000000000000000000000000000000000000000') as `0x${string}`;
+
+export const TRUTH_REGISTRY_ABI = [
+  {
+    name: 'TruthVoted',
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      { name: 'confessionId', type: 'uint256', indexed: true },
+      { name: 'voter',        type: 'address', indexed: true },
+      { name: 'isReal',       type: 'bool',    indexed: false },
+    ],
+  },
+  {
+    name: 'voteTruth',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'confessionId', type: 'uint256' },
+      { name: 'isReal',       type: 'bool'    },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'getTruthStats',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'confessionId', type: 'uint256' }],
+    outputs: [
+      { name: 'real', type: 'uint256' },
+      { name: 'fake', type: 'uint256' },
+    ],
+  },
+  {
+    name: 'hasVoted',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: '', type: 'uint256' },
+      { name: '', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    name: 'realVotes',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: '', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    name: 'fakeVotes',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: '', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+] as const;
+
+// ============================================================
 // LOVE METER
 // ============================================================
 export const LOVE_METER_CONTRACT_ADDRESS =
