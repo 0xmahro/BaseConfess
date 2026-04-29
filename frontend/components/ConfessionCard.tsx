@@ -166,7 +166,7 @@ export function ConfessionCard({
         }
       }
       if (!voteContractAddress) {
-        setLegacyVoteError('Bu itiraf icin oy kontrati bulunamadi.');
+        setLegacyVoteError('No voting contract found for this confession.');
         return;
       }
       const hash = await writeContractAsync({
@@ -195,11 +195,11 @@ export function ConfessionCard({
         normalized.includes('gas required exceeds allowance') ||
         normalized.includes('intrinsic gas too low')
       ) {
-        setLegacyVoteError('Oy icin cuzdanda biraz Base ETH olmali (gas).');
+        setLegacyVoteError('You need a small amount of Base ETH for gas to vote.');
       } else if (normalized.includes('confession not found')) {
-        setLegacyVoteError('Bu itiraf eski kontratta oldugu icin oy verilemiyor.');
+        setLegacyVoteError('Voting is not available on this legacy confession.');
       } else {
-        setLegacyVoteError('Like/Dislike oyu gonderilemedi. Tekrar dene.');
+        setLegacyVoteError('Could not submit your vote. Please try again.');
       }
     }
   };

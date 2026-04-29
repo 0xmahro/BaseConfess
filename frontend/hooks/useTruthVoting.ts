@@ -75,9 +75,9 @@ export function useTruthVoting({
     const message =
       txReceiptError instanceof Error ? txReceiptError.message.toLowerCase() : '';
     if (message.includes('reverted')) {
-      setError('Islem zincirde basarisiz oldu (revert).');
+      setError('Transaction reverted on chain.');
     } else {
-      setError('Islem dogrulanamadi. Tekrar dene.');
+      setError('Transaction could not be confirmed. Please try again.');
     }
   }, [txReceiptFailed, txReceiptError, initialHasVoted, initialRealVotes, initialFakeVotes]);
 
@@ -88,7 +88,7 @@ export function useTruthVoting({
       setHasVoted(initialHasVoted);
       setRealVotes(initialRealVotes);
       setFakeVotes(initialFakeVotes);
-      setError('Islem uzun surdu. Durumu cuzdandan kontrol edip tekrar dene.');
+      setError('Transaction is taking too long. Please check your wallet and try again.');
     }, 90000);
     return () => clearTimeout(timer);
   }, [txHash, initialHasVoted, initialRealVotes, initialFakeVotes]);
