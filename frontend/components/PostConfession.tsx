@@ -63,31 +63,51 @@ export function PostConfession() {
     const capturedText = submittedTextRef.current;
 
     const store = async () => {
+      let stored = false;
       try {
-        const logs = parseEventLogs({ abi: CONTRACT_ABI, logs: receipt.logs, eventName: 'ConfessionPosted' });
+        const logs = parseEventLogs({
+          abi: CONTRACT_ABI,
+          logs: receipt.logs,
+          eventName: 'ConfessionPosted',
+          strict: false,
+        });
         if (logs.length === 0) throw new Error('Event not found');
 
-        const { confessionId, confessionHash, timestamp } = logs[0].args as {
-          confessionId: bigint; confessionHash: `0x${string}`; timestamp: bigint;
+        const { confessionId, confessionHash, timestamp, user } = logs[0].args as {
+          confessionId: bigint;
+          confessionHash: `0x${string}`;
+          timestamp: bigint;
+          user?: `0x${string}`;
         };
 
         const { error: upsertError } = await supabase.from('confessions').upsert(
-          { id: Number(confessionId), wallet: address.toLowerCase(), text: capturedText, hash: confessionHash, timestamp: new Date(Number(timestamp) * 1000).toISOString() },
+          {
+            id: Number(confessionId),
+            wallet: (user ?? address).toLowerCase(),
+            text: capturedText,
+            hash: confessionHash,
+            timestamp: new Date(Number(timestamp) * 1000).toISOString(),
+          },
           { onConflict: 'id' }
         );
         if (upsertError) throw upsertError;
+        stored = true;
 
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('confession:posted'));
         }
       } catch (err) {
         console.error('[PostConfession] Supabase write error:', err);
+        setErrorMsg('Transaction confirmed but feed sync failed. Please tap Refresh.');
+        setStatus('error');
       } finally {
-        setText('');
         setTxHash(undefined);
-        submittedTextRef.current = '';
-        setStatus('success');
-        setTimeout(() => setStatus('idle'), 4000);
+        if (stored) {
+          setText('');
+          submittedTextRef.current = '';
+          setStatus('success');
+          setTimeout(() => setStatus('idle'), 4000);
+        }
       }
     };
     store();
