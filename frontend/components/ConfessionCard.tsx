@@ -10,6 +10,7 @@ import { useTruthVoting } from '@/hooks/useTruthVoting';
 import { CONTRACT_ABI, CONTRACT_ADDRESS, LEGACY_CONTRACT_ADDRESS, LEGACY_CONTRACT_ADDRESS_2 } from '@/lib/config';
 import { supabase } from '@/lib/supabase';
 import { toOnchainConfessionId } from '@/lib/confessionId';
+import { builderCodeTxOpts } from '@/lib/builderCode';
 
 interface ConfessionCardProps {
   confession: Confession;
@@ -174,6 +175,7 @@ export function ConfessionCard({
         functionName: 'vote',
         args: [onchainConfessionId, voteType],
         gas: BigInt(200000),
+        ...builderCodeTxOpts(),
       });
       pendingVoteRef.current = voteType;
       setVoteTxHash(hash);

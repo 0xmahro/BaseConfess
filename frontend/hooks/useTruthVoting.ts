@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { CONTRACT_ABI } from '@/lib/config';
 import { toOnchainConfessionId } from '@/lib/confessionId';
+import { builderCodeTxOpts } from '@/lib/builderCode';
 
 type UseTruthVotingParams = {
   confessionId: number;
@@ -101,6 +102,7 @@ export function useTruthVoting({
         functionName: 'voteTruth',
         args: [toOnchainConfessionId(confessionId), isReal],
         gas: BigInt(220000),
+        ...builderCodeTxOpts(),
       });
       setTxHash(hash);
     } catch (err: unknown) {
