@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useTruthVoting } from '@/hooks/useTruthVoting';
 import { CONTRACT_ABI, CONTRACT_ADDRESS, LEGACY_CONTRACT_ADDRESS, LEGACY_CONTRACT_ADDRESS_2 } from '@/lib/config';
 import { supabase } from '@/lib/supabase';
+import { toOnchainConfessionId } from '@/lib/confessionId';
 
 interface ConfessionCardProps {
   confession: Confession;
@@ -138,6 +139,7 @@ export function ConfessionCard({
     setLocalUserVote(voteType);
 
     try {
+      const onchainConfessionId = toOnchainConfessionId(confession.id);
       let voteContractAddress = likeDislikeContractAddress;
       if (!voteContractAddress && publicClient) {
         const candidates: `0x${string}`[] = [
@@ -151,7 +153,7 @@ export function ConfessionCard({
               address: candidate,
               abi: CONTRACT_ABI,
               functionName: 'confessionOwner',
-              args: [BigInt(confession.id)],
+              args: [onchainConfessionId],
             })) as `0x${string}`;
             if (owner && owner.toLowerCase() !== '0x0000000000000000000000000000000000000000') {
               voteContractAddress = candidate;
@@ -170,7 +172,7 @@ export function ConfessionCard({
         address: voteContractAddress,
         abi: CONTRACT_ABI,
         functionName: 'vote',
-        args: [BigInt(confession.id), voteType],
+        args: [onchainConfessionId, voteType],
         gas: BigInt(200000),
       });
       pendingVoteRef.current = voteType;

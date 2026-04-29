@@ -14,6 +14,7 @@ import {
   PROFILE_CONTRACT_ABI,
   PROFILE_CONTRACT_ADDRESS,
 } from '@/lib/config';
+import { toOnchainConfessionId } from '@/lib/confessionId';
 
 type SortKey = 'newest' | 'most_liked' | 'most_disliked' | 'most_tipped';
 
@@ -280,7 +281,7 @@ export function ConfessionFeed() {
 
   const truthContracts = useMemo(() => {
     return paginated.flatMap((c) => {
-      const confessionId = BigInt(c.id);
+      const confessionId = toOnchainConfessionId(c.id);
       const ownerCall = {
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,

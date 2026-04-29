@@ -7,6 +7,7 @@ import { keccak256, toBytes, parseEther, parseEventLogs } from 'viem';
 import { builderCodeTxOpts } from '@/lib/builderCode';
 import { CONTRACT_ADDRESS, CONTRACT_ABI, CONFESSION_FEE } from '@/lib/config';
 import { supabase } from '@/lib/supabase';
+import { toDbConfessionId } from '@/lib/confessionId';
 
 const MAX_CHARS = 1000;
 const MIN_CONFESSION_CHARS = 15;
@@ -80,9 +81,10 @@ export function PostConfession() {
           user?: `0x${string}`;
         };
 
+        const dbConfessionId = toDbConfessionId(confessionId, CONTRACT_ADDRESS);
         const { error: upsertError } = await supabase.from('confessions').upsert(
           {
-            id: Number(confessionId),
+            id: Number(dbConfessionId),
             wallet: (user ?? address).toLowerCase(),
             text: capturedText,
             hash: confessionHash,

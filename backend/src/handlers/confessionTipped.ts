@@ -1,5 +1,6 @@
 import { formatEther } from 'viem';
 import { supabase } from '../lib/supabase.js';
+import { toDbConfessionId } from '../lib/confessionId.js';
 
 interface ConfessionTippedArgs {
   confessionId: bigint;
@@ -16,7 +17,7 @@ interface ConfessionTippedArgs {
  */
 export async function handleConfessionTipped(args: ConfessionTippedArgs) {
   const { confessionId, from, to, amount } = args;
-  const confessionIdNum = Number(confessionId);
+  const confessionIdNum = Number(toDbConfessionId(confessionId));
 
   console.log(`[ConfessionTipped] id=${confessionId} from=${from} amount=${formatEther(amount)} ETH`);
 

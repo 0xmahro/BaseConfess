@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase.js';
+import { toDbConfessionId } from '../lib/confessionId.js';
 
 interface ConfessionPostedArgs {
   confessionId: bigint;
@@ -20,9 +21,10 @@ export async function handleConfessionPosted(args: ConfessionPostedArgs) {
 
   console.log(`[ConfessionPosted] id=${confessionId} wallet=${user}`);
 
+  const dbId = Number(toDbConfessionId(confessionId));
   const { error } = await supabase.from('confessions').upsert(
     {
-      id:        Number(confessionId),
+      id:        dbId,
       wallet:    user.toLowerCase(),
       hash:      confessionHash,
       timestamp: new Date(Number(timestamp) * 1000).toISOString(),

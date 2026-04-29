@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase.js';
+import { toDbConfessionId } from '../lib/confessionId.js';
 
 interface ConfessionVotedArgs {
   confessionId: bigint;
@@ -15,7 +16,7 @@ interface ConfessionVotedArgs {
  */
 export async function handleConfessionVoted(args: ConfessionVotedArgs) {
   const { confessionId, voter, vote: voteType } = args;
-  const confessionIdNum = Number(confessionId);
+  const confessionIdNum = Number(toDbConfessionId(confessionId));
   const walletLower     = voter.toLowerCase();
 
   console.log(`[ConfessionVoted] id=${confessionId} voter=${voter} vote=${voteType}`);

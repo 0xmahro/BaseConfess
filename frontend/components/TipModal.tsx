@@ -7,6 +7,7 @@ import { parseEther } from 'viem';
 import { builderCodeTxOpts } from '@/lib/builderCode';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '@/lib/config';
 import { supabase } from '@/lib/supabase';
+import { toOnchainConfessionId } from '@/lib/confessionId';
 
 interface TipModalProps {
   confessionId: number;
@@ -47,7 +48,7 @@ export function TipModal({ confessionId, ownerWallet, onClose }: TipModalProps) 
         address:      CONTRACT_ADDRESS,
         abi:          CONTRACT_ABI,
         functionName: 'tip',
-        args:         [BigInt(confessionId)],
+        args:         [toOnchainConfessionId(confessionId)],
         value:        parseEther(finalAmount),
         ...builderCodeTxOpts(),
       });
